@@ -9,10 +9,24 @@
 <body>
   <main class="container">
     <header class="page-header">
-      <h1>SiteOps Checklist</h1>
-      <p class="subtitle">Personal Website Operations Manager</p>
+      <div>
+        <h1>SiteOps Checklist</h1>
+        <p class="subtitle">Personal Website Operations Manager</p>
+      </div>
+      <div id="user-box" class="user-box" hidden>
+        <span id="user-email"></span>
+        <button type="button" id="logout" class="btn small">로그아웃</button>
+      </div>
     </header>
 
+    <section id="login-view" class="panel login" hidden>
+      <h2>로그인</h2>
+      <p>Google 계정으로 로그인하면 내 사이트와 점검 항목만 따로 관리할 수 있습니다.<br>처음 로그인하면 자동으로 가입됩니다.</p>
+      <button type="button" id="login-google" class="btn primary">Google로 로그인</button>
+      <p id="login-error" class="error" role="alert"></p>
+    </section>
+
+    <div id="app-view" hidden>
     <section class="summary" aria-label="요약">
       <div class="card"><span class="label">전체 점검</span><strong id="sum-total">0</strong></div>
       <div class="card"><span class="label">미완료</span><strong id="sum-open">0</strong></div>
@@ -46,6 +60,16 @@
         <button type="submit" class="btn primary">점검 항목 추가</button>
       </form>
       <p id="add-error" class="error" role="alert"></p>
+
+      <details class="site-add">
+        <summary>+ 사이트 추가</summary>
+        <form id="site-form" class="site-form" autocomplete="off">
+          <input name="name" maxlength="50" required placeholder="사이트 이름 (예: 내 블로그)" aria-label="사이트 이름">
+          <input name="url" type="url" placeholder="https://… (선택)" aria-label="사이트 주소">
+          <button type="submit" class="btn">추가</button>
+        </form>
+        <p id="site-error" class="error" role="alert"></p>
+      </details>
     </section>
 
     <section class="panel">
@@ -64,6 +88,7 @@
       <ul id="todo-list" class="todo-list"></ul>
       <p id="empty" class="empty" hidden>조건에 맞는 점검 항목이 없습니다.</p>
     </section>
+    </div>
   </main>
 
   <dialog id="edit-dialog">

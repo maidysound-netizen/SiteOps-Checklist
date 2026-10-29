@@ -2,11 +2,12 @@
 
 개인 웹사이트 운영 점검 항목을 관리하는 Todo 앱입니다. (학교 과제 — To Do App)
 
-**배포 주소: https://siteops-checklist.vercel.app** (Vercel + Supabase)
+**배포 주소: https://siteops-checklist.vercel.app** (Vercel + Supabase, Google 로그인)
 
 - 기본 기능: 점검 항목 추가 · 조회 · 수정 · 삭제, 완료 체크
 - 추가 기능: **카테고리**(보안·배포·백업·DNS·콘텐츠) 지정과 필터, **마감일** 지정과 기한 지남·오늘 마감·D-n 표시, 마감일순 정렬
-- 저장소: 로컬 SQLite 파일 (`db/siteops.db`)
+- 확장 기능: **Google 로그인** — 사람마다 자기 사이트·점검 항목만 보고 관리 (배포 사이트, Supabase 모드)
+- 저장소: 로컬 SQLite 파일 (`db/siteops.db`, 로그인 없음) 또는 Supabase
 
 자세한 기획은 [PRD.md](PRD.md)에 있습니다.
 
@@ -26,25 +27,32 @@ npm start
 - 처음 상태로 되돌리려면 서버를 끄고 `npm run db:reset` 후 다시 `npm start` 합니다.
 - 포트를 바꾸려면 `PORT=4000 npm start`.
 
-## Supabase로 전환하기 (선택)
+## Supabase + Google 로그인으로 전환하기 (선택)
 
-기본 저장소는 SQLite입니다. `.env` 설정만 바꾸면 같은 화면·API가 Supabase(Postgres)에 저장됩니다.
+기본 저장소는 SQLite(로그인 없음)입니다. `.env` 설정만 바꾸면 같은 화면·API가 Supabase(Postgres)에 저장되고, Google 로그인 후 사람마다 자기 데이터만 보게 됩니다.
 
-1. [supabase.com](https://supabase.com)에서 GitHub 계정으로 로그인하고 **새 프로젝트**를 만듭니다.
-2. 대시보드 **SQL Editor**에 [`supabase/setup.sql`](supabase/setup.sql) 내용을 붙여넣고 **Run** 합니다. (테이블 · 트리거 · 뷰 · RLS · 예시 데이터, 여러 번 실행해도 안전)
-3. `.env.example`을 `.env`로 복사하고 값을 채웁니다.
+1. [supabase.com](https://supabase.com)에서 **새 프로젝트**를 만듭니다.
+2. 대시보드 **SQL Editor**에 [`supabase/setup.sql`](supabase/setup.sql) 내용을 붙여넣고 **Run** 합니다. (테이블 · 트리거 · 뷰 · RLS 정책 · 카테고리, 여러 번 실행해도 안전)
+3. Google 로그인 설정
+   - [Google Cloud Console](https://console.cloud.google.com) → Google 인증 플랫폼에서 OAuth 동의 화면(외부)을 만들고, **웹 애플리케이션** 클라이언트를 만듭니다. 승인된 리디렉션 URI: `https://<프로젝트 ID>.supabase.co/auth/v1/callback`
+   - Supabase → Authentication → **Sign In / Providers → Google**을 켜고 Client ID·Client Secret을 넣습니다.
+   - Supabase → Authentication → **URL Configuration**: Site URL에 배포 주소, Redirect URLs에 `https://<배포 주소>/**`, `http://localhost:3000/**`
+   - 다른 사람도 로그인하게 하려면 Google 인증 플랫폼 → 대상 → **앱 게시**
+4. `.env.example`을 `.env`로 복사하고 값을 채웁니다. (Vercel이면 같은 값을 환경 변수에)
    ```
    DB_DRIVER=supabase
    SUPABASE_URL=https://<프로젝트 ID>.supabase.co
-   SUPABASE_SECRET_KEY=sb_secret_...
+   SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
    ```
-4. `npm start` — 터미널에 `DB: Supabase (...)`가 보이면 연결된 것입니다.
+5. `npm start` → 브라우저에서 **Google로 로그인**.
+6. (v1에서 업그레이드한 경우만) 처음 로그인한 뒤 [`supabase/claim.sql`](supabase/claim.sql)을 SQL Editor에서 한 번 실행하면 예전 데이터가 내 계정으로 옮겨집니다.
 
 보안 메모
 
-- `permission denied for table ...` 오류가 나면 `setup.sql`의 `grant ... to service_role` 부분이 실행됐는지 확인하세요. (최근 Supabase 프로젝트는 테이블 권한을 자동으로 주지 않습니다)
-- 세 테이블 모두 RLS를 켜고 정책은 만들지 않았습니다. 공개 키(anon/publishable)로는 읽기·쓰기가 모두 막히고, secret 키를 가진 서버만 접근합니다.
-- secret 키는 `.env`에만 두며 `.gitignore`로 GitHub에 올라가지 않습니다. 브라우저 코드(`public/`)에는 키가 없습니다.
+- 앱은 **secret 키를 쓰지 않습니다.** publishable 키는 브라우저에 내려가도 되는 공개용 키이고, 실제 권한은 로그인 토큰 + RLS 정책(`user_id = auth.uid()`)이 정합니다. 서버 코드에 실수가 있어도 DB가 남의 데이터를 막습니다.
+- 로그인하지 않은 요청은 서버에서 401, DB에서도 권한 없음으로 막힙니다.
+- `permission denied for table ...` 오류가 나면 `setup.sql`의 `grant ... to authenticated` 부분이 실행됐는지 확인하세요.
+- Google Client Secret은 Supabase 대시보드에만 저장하고 코드·`.env`에는 넣지 않습니다.
 - 다시 SQLite로 돌아가려면 `.env`에서 `DB_DRIVER=sqlite`로 바꿉니다.
 
 ## 폴더 구조
@@ -56,16 +64,17 @@ todo-assignment/
 ├── .env.example      환경 변수 예시 (복사해서 .env로 사용)
 ├── lib/
 │   ├── store-sqlite.js    SQLite 저장소
-│   ├── store-supabase.js  Supabase 저장소
+│   ├── store-supabase.js  Supabase 저장소 (로그인한 사용자 권한으로 접속)
 │   └── errors.js          공통 오류
 ├── db/
 │   ├── schema.sql    테이블 · 인덱스 · 트리거 · 뷰 (SQLite)
 │   └── seed.sql      예시 데이터
 ├── supabase/
-│   └── setup.sql     같은 구조의 Postgres 버전 + RLS + 예시 데이터
+│   ├── setup.sql     같은 구조의 Postgres 버전 + 사용자별 RLS 정책 + 카테고리
+│   └── claim.sql     v1 데이터를 내 계정으로 옮기기 (업그레이드 시 한 번)
 └── public/
     ├── index.html    화면
-    ├── app.js        화면 동작 (fetch로 API 호출)
+    ├── app.js        화면 동작 (fetch로 API 호출, Google 로그인)
     └── style.css     스타일 (다크 모드 · 모바일 대응)
 ```
 
@@ -77,9 +86,9 @@ sites (1) ──< todos >── (1) categories
 
 | 테이블 | 설명 |
 | --- | --- |
-| `todos` | 점검 항목: 제목, 메모, 사이트, 카테고리, 마감일, 완료 여부, 완료 시각 |
+| `todos` | 점검 항목: 제목, 메모, 사이트, 카테고리, 마감일, 완료 여부, 완료 시각 (Supabase: 사용자별) |
 | `categories` | 점검 분류와 배지 색상 |
-| `sites` | 관리 대상 사이트 |
+| `sites` | 관리 대상 사이트 (Supabase: 사용자별) |
 | `todo_list` (뷰) | 목록 화면용 — 이름 조인과 마감 상태(`overdue` / `today` / `upcoming`) 계산 |
 
 ## API
@@ -93,4 +102,8 @@ sites (1) ──< todos >── (1) categories
 | DELETE | `/api/todos/:id` | 삭제 |
 | GET | `/api/categories` | 카테고리 목록 |
 | GET | `/api/sites` | 사이트 목록 |
+| POST | `/api/sites` | 사이트 추가 (`name` 필수, `url` 선택) |
+| GET | `/api/config` | 로그인 모드 여부 (화면용) |
 | GET | `/api/summary` | 전체 / 미완료 / 완료 / 기한 지남 개수 |
+
+Supabase 모드에서는 `/api/config`를 뺀 모든 API에 로그인 토큰(`Authorization: Bearer ...`)이 필요합니다.

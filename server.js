@@ -1,9 +1,9 @@
 // SiteOps Checklist — Express 서버
-// 저장소: 기본 SQLite, .env에 DB_DRIVER=supabase 이면 Supabase
+// 저장소: 기본 SQLite(로그인 없음), .env에 DB_DRIVER=supabase 이면 Supabase + Google 로그인
 import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { HttpError, notFound } from './lib/errors.js';
+import { HttpError, notFound, unauthorized } from './lib/errors.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT ?? 3000);
@@ -22,9 +22,9 @@ async function createStore() {
     });
   }
   if (driver === 'supabase') {
-    const { SUPABASE_URL: url, SUPABASE_SECRET_KEY: key } = process.env;
+    const { SUPABASE_URL: url, SUPABASE_PUBLISHABLE_KEY: key } = process.env;
     if (!url || !key) {
-      throw new Error('DB_DRIVER=supabase 이면 SUPABASE_URL과 SUPABASE_SECRET_KEY가 필요합니다. (.env.example 참고)');
+      throw new Error('DB_DRIVER=supabase 이면 SUPABASE_URL과 SUPABASE_PUBLISHABLE_KEY가 필요합니다. (.env.example 참고)');
     }
     const { createSupabaseStore } = await import('./lib/store-supabase.js');
     return createSupabaseStore({ url, key });
@@ -77,16 +77,41 @@ function parseTodoInput(body = {}, { partial = false } = {}) {
   return out;
 }
 
+function parseSiteInput(body = {}) {
+  const name = String(body.name ?? '').trim();
+  if (name.length < 1 || name.length > 50) throw new HttpError(400, '사이트 이름은 1~50자로 입력해 주세요.');
+  const url = String(body.url ?? '').trim() || null;
+  if (url !== null && !/^https?:\/\/\S+$/.test(url)) throw new HttpError(400, '주소는 http:// 또는 https://로 시작해야 합니다.');
+  return { name, url };
+}
+
 // ---------- API ----------
 const app = express();
 app.use(express.json());
 app.use(express.static(path.join(ROOT, 'public')));
 
+// 화면이 로그인 화면을 띄울지 결정하는 값 (publishable 키는 공개용이라 내려줘도 안전)
+app.get('/api/config', (req, res) => {
+  res.json(store.auth ? { auth: true, ...store.publicConfig } : { auth: false });
+});
+
+// 로그인 모드: 요청마다 그 사용자의 토큰으로 저장소를 만든다 → DB RLS가 자기 데이터만 허용
+app.use('/api', (req, res, next) => {
+  if (!store.auth) {
+    req.store = store;
+    return next();
+  }
+  const token = req.get('authorization')?.match(/^Bearer (\S+)$/)?.[1];
+  if (!token) throw unauthorized();
+  req.store = store.forUser(token);
+  next();
+});
+
 app.get('/api/todos', async (req, res) => {
   const status = req.query.status ?? 'all';
   if (!STATUSES.includes(status)) throw new HttpError(400, '상태 필터가 올바르지 않습니다.');
   res.json(
-    await store.listTodos({
+    await req.store.listTodos({
       site: toOptionalId(req.query.site, '사이트'),
       category: toOptionalId(req.query.category, '카테고리'),
       status,
@@ -95,39 +120,43 @@ app.get('/api/todos', async (req, res) => {
 });
 
 app.get('/api/todos/:id', async (req, res) => {
-  const todo = await store.getTodo(parseId(req.params.id));
+  const todo = await req.store.getTodo(parseId(req.params.id));
   if (!todo) throw notFound();
   res.json(todo);
 });
 
 app.post('/api/todos', async (req, res) => {
-  res.status(201).json(await store.createTodo(parseTodoInput(req.body)));
+  res.status(201).json(await req.store.createTodo(parseTodoInput(req.body)));
 });
 
 app.patch('/api/todos/:id', async (req, res) => {
   const id = parseId(req.params.id);
   const input = parseTodoInput(req.body, { partial: true });
   if (Object.keys(input).length === 0) throw new HttpError(400, '수정할 내용이 없습니다.');
-  const todo = await store.updateTodo(id, input);
+  const todo = await req.store.updateTodo(id, input);
   if (!todo) throw notFound();
   res.json(todo);
 });
 
 app.delete('/api/todos/:id', async (req, res) => {
-  if (!(await store.deleteTodo(parseId(req.params.id)))) throw notFound();
+  if (!(await req.store.deleteTodo(parseId(req.params.id)))) throw notFound();
   res.status(204).end();
 });
 
 app.get('/api/categories', async (req, res) => {
-  res.json(await store.listCategories());
+  res.json(await req.store.listCategories());
 });
 
 app.get('/api/sites', async (req, res) => {
-  res.json(await store.listSites());
+  res.json(await req.store.listSites());
+});
+
+app.post('/api/sites', async (req, res) => {
+  res.status(201).json(await req.store.createSite(parseSiteInput(req.body)));
 });
 
 app.get('/api/summary', async (req, res) => {
-  res.json(await store.summary());
+  res.json(await req.store.summary());
 });
 
 app.use('/api', (req, res) => {

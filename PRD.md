@@ -7,6 +7,7 @@
 | v1.0 | 2026-10-29 | 기본 CRUD + 카테고리 + 마감일, 로컬 SQLite 저장 |
 | v1.1 | 2026-10-29 | Supabase(Postgres) 저장소 선택 기능 추가, RLS 적용 |
 | v1.2 | 2026-10-29 | Vercel 배포 (https://siteops-checklist.vercel.app) |
+| v2.0 | 2026-10-29 | Google 로그인(Supabase Auth) + 사용자별 데이터(RLS 정책), 사이트 추가 |
 
 ## 1. 개요
 
@@ -14,7 +15,7 @@
 | --- | --- |
 | 제품명 | SiteOps Checklist |
 | 한 줄 설명 | 여러 개인 사이트(GitHub, Vercel, Supabase, DNS, Blogger 등)의 운영 점검 항목을 등록하고 완료 여부를 추적하는 Todo 앱 |
-| 사용자 | 본인 1명 (로그인 없음) |
+| 사용자 | 배포 사이트: Google 계정으로 로그인한 누구나 (각자 자기 데이터만) / 로컬 SQLite: 본인 1명 (로그인 없음) |
 | 배포 주소 | https://siteops-checklist.vercel.app (Vercel, Supabase 저장소) |
 | 저장소 | 기본: 로컬 SQLite 파일 (`db/siteops.db`) / 선택: Supabase (`.env`에서 `DB_DRIVER=supabase`) |
 | 기술 스택 | Node.js 22.13+ · Express 5 · `node:sqlite`(내장) · `@supabase/supabase-js` · HTML/CSS/JavaScript(프레임워크 없음) |
@@ -38,6 +39,7 @@
 | (보조) 사이트 분류 | 항목이 속한 사이트 지정, 사이트 필터 | 완료 |
 | SQLite | 로컬 파일에 영구 저장 (재시작 후에도 유지) | 완료 |
 | Supabase 연동 | 같은 API·화면을 Supabase(Postgres)에 저장 | 완료 |
+| (확장) 로그인 | Google 로그인, 사용자별 사이트·점검 항목 분리 | 완료 |
 
 ## 4. 기능 요구사항
 
@@ -84,10 +86,22 @@
 | ID | 기능 | 상세 |
 | --- | --- | --- |
 | F-40 | SQLite 모드 | 기본값. 처음 실행 시 `db/siteops.db` 생성 + 예시 데이터 입력 |
-| F-41 | Supabase 모드 | `.env`에 `DB_DRIVER=supabase`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY` 설정 시 사용 |
-| F-42 | 시작 시 연결 확인 | Supabase 설정 누락·주소 오류·테이블 없음이면 이유를 출력하고 서버 시작 중단 |
+| F-41 | Supabase 모드 | `.env`에 `DB_DRIVER=supabase`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` 설정 시 사용 (v2부터 로그인 필수) |
+| F-42 | 시작 시 연결 확인 | Supabase 설정 누락·주소·키 오류면 이유를 출력하고 서버 시작 중단, Google 로그인이 꺼져 있으면 경고 |
 
 두 모드는 같은 API 응답 형식을 돌려주므로 화면 코드(`public/`)는 저장소와 무관하다.
+
+### 4.6 로그인과 사용자별 데이터 (v2.0, Supabase 모드)
+
+| ID | 기능 | 상세 |
+| --- | --- | --- |
+| F-50 | Google 로그인 | 로그인하지 않으면 로그인 화면만 표시. 처음 로그인하면 자동 가입 (별도 가입 폼 없음) |
+| F-51 | 로그아웃 | 오른쪽 위에 내 이메일과 로그아웃 버튼 |
+| F-52 | 사용자별 데이터 | 점검 항목·사이트는 만든 사람만 조회·수정·삭제. 카테고리는 모두 공통 |
+| F-53 | 사이트 추가 | "+ 사이트 추가"에서 이름(1~50자, 내 사이트 중 중복 불가)과 주소(선택, http/https) 입력 |
+| F-54 | 기존 데이터 이전 | v1 데이터(주인 없음)를 처음 가입한 계정으로 옮기는 `supabase/claim.sql` |
+
+로그인 흐름: 브라우저가 Supabase Auth로 Google 로그인(PKCE) → 받은 access token을 API 요청의 `Authorization: Bearer` 헤더로 보냄 → 서버는 그 토큰으로 Supabase에 접속 → DB의 RLS 정책이 `user_id = auth.uid()`인 행만 허용.
 
 ## 5. 비기능 요구사항
 
@@ -98,10 +112,10 @@
   - 사이트·카테고리: 존재하는 ID만 허용 (외래 키)
 - **SQL 인젝션 방지**: SQLite는 파라미터 바인딩(`?`), Supabase는 클라이언트 라이브러리의 쿼리 빌더만 사용한다. 수정 가능한 컬럼은 서버의 허용 목록으로 제한한다.
 - **XSS 방지**: 화면에 사용자 입력을 넣을 때 `textContent`만 사용한다 (`innerHTML` 미사용).
-- **비밀 키 관리**: Supabase secret 키는 서버의 `.env`에만 두고 `.gitignore`로 저장소에서 제외한다. 브라우저 코드에는 키가 없다.
-- **Supabase 접근 제한 (RLS)**: 세 테이블 모두 RLS를 켜고 정책은 만들지 않는다. 공개 키(anon/publishable)로는 읽기·쓰기가 모두 막히고 secret 키를 쓰는 서버만 접근한다. 뷰는 `security_invoker`로 만들어 RLS를 우회하지 못하게 한다.
-- **테이블 권한 (GRANT)**: 최근 Supabase 프로젝트는 SQL로 만든 테이블에 권한을 자동으로 주지 않으므로, `setup.sql`에서 `service_role`에만 `select/insert/update/delete` 권한을 명시적으로 준다.
-- **오류 응답**: JSON `{ "error": "한국어 메시지" }` + 400 / 404 / 500 상태 코드.
+- **키 관리 (v2)**: 앱은 secret 키를 쓰지 않고 공개용 publishable 키만 쓴다. 이 키는 브라우저에 내려가도 되는 키이며, 권한은 로그인 토큰과 RLS가 정한다. Google OAuth Client Secret은 Supabase 대시보드에만 저장한다.
+- **사용자별 접근 제한 (RLS)**: `sites`·`todos`에 `user_id`(기본값 `auth.uid()`) 컬럼을 두고 정책 `user_id = auth.uid()`로 자기 행만 읽고 쓰게 한다. 항목에 붙이는 사이트도 내 사이트여야 한다. 로그인하지 않은 공개 키(anon)는 권한이 없어 모두 차단된다. 뷰는 `security_invoker`로 만들어 RLS를 우회하지 못하게 한다.
+- **테이블 권한 (GRANT)**: 최근 Supabase 프로젝트는 SQL로 만든 테이블에 권한을 자동으로 주지 않으므로, `setup.sql`에서 `authenticated`에 필요한 권한만 명시적으로 준다 (카테고리는 읽기만).
+- **오류 응답**: JSON `{ "error": "한국어 메시지" }` + 400 / 401(로그인 필요) / 403 / 404 / 409(사이트 이름 중복) / 500 상태 코드.
 - **화면**: 휴대폰 폭(375px)에서 가로 스크롤 없이 표시, 시스템 다크 모드 지원.
 
 ## 6. 시스템 구조
@@ -110,17 +124,19 @@
 브라우저 (public/)                    서버 (server.js)                      저장소 (lib/)
 index.html · app.js · style.css ──▶  Express REST API            ──▶  store-sqlite.js   ──▶ db/siteops.db
         fetch /api/...                 입력 검증 · 오류 처리              store-supabase.js ──▶ Supabase (Postgres)
-                                       DB_DRIVER로 저장소 선택
+  (Supabase 모드) Google 로그인         DB_DRIVER로 저장소 선택            요청마다 사용자 토큰으로 접속 → RLS
+  → Authorization: Bearer 토큰          토큰 없으면 401
 ```
 
 | 파일 | 역할 |
 | --- | --- |
 | `server.js` | API 경로, 입력 검증, 오류 처리, `.env`에 따라 저장소 선택 |
 | `lib/store-sqlite.js` | SQLite 읽기·쓰기 (Node 내장 `node:sqlite`) |
-| `lib/store-supabase.js` | Supabase 읽기·쓰기, Postgres 오류 코드를 400 오류로 변환 |
+| `lib/store-supabase.js` | Supabase 읽기·쓰기 (요청한 사용자 권한으로), Postgres 오류 코드를 HTTP 오류로 변환 |
 | `lib/errors.js` | 공통 HTTP 오류 |
 | `db/schema.sql`, `db/seed.sql` | SQLite 스키마와 예시 데이터 |
-| `supabase/setup.sql` | 같은 구조의 Postgres 버전 + RLS + 예시 데이터 (SQL Editor에서 실행, 여러 번 실행해도 안전) |
+| `supabase/setup.sql` | 같은 구조의 Postgres 버전 + `user_id` + RLS 정책 + 카테고리 (SQL Editor에서 실행, 여러 번 실행해도 안전, v1 DB도 그대로 업그레이드) |
+| `supabase/claim.sql` | v1 데이터를 처음 가입한 계정으로 옮김 (첫 로그인 후 한 번) |
 | `.env.example` | 환경 변수 예시 |
 
 ## 7. 데이터 모델
@@ -131,9 +147,9 @@ sites (1) ──< todos >── (1) categories
 
 | 테이블 | 역할 | 핵심 컬럼 |
 | --- | --- | --- |
-| `sites` | 관리 대상 사이트 | `name`(고유), `url` |
+| `sites` | 관리 대상 사이트 | `name`, `url`, `user_id`(Supabase) — 이름은 사용자마다 고유 |
 | `categories` | 점검 분류 | `name`(고유), `color`, `sort_order` |
-| `todos` | 점검 항목 | `title`, `memo`, `site_id`, `category_id`, `due_date`, `is_done`, `completed_at`, `created_at`, `updated_at` |
+| `todos` | 점검 항목 | `title`, `memo`, `site_id`, `category_id`, `due_date`, `is_done`, `completed_at`, `created_at`, `updated_at`, `user_id`(Supabase) |
 | `todo_list` (뷰) | 목록 화면용 | 사이트·카테고리 이름 조인, `due_status`(`overdue` / `today` / `upcoming`) |
 
 - 사이트·카테고리를 지워도 항목은 남고 해당 칸만 비워진다 (`ON DELETE SET NULL`).
@@ -148,7 +164,7 @@ SQLite와 Postgres의 차이
 | 마감일 | `TEXT` + 날짜 형식 `CHECK` | `date` 타입 |
 | 시각 | `TEXT` (로컬 시각) | `timestamptz` |
 | 트리거 | `AFTER UPDATE` 2개 | `BEFORE INSERT OR UPDATE` 함수 1개 |
-| 접근 제어 | 로컬 파일 | RLS |
+| 접근 제어 | 로컬 파일 (로그인 없음) | Google 로그인 + RLS 정책 (`user_id = auth.uid()`) |
 
 ## 8. API 설계 (REST)
 
@@ -160,21 +176,26 @@ SQLite와 Postgres의 차이
 | PATCH | `/api/todos/:id` | 항목 수정(부분) · 완료 토글 (`{"is_done": true}`) |
 | DELETE | `/api/todos/:id` | 항목 삭제 → 204 |
 | GET | `/api/categories` | 카테고리 목록 |
+| GET | `/api/config` | 로그인 모드 여부, Supabase 주소·publishable 키 |
 | GET | `/api/sites` | 사이트 목록 |
+| POST | `/api/sites` | 사이트 추가 (`name` 필수, `url` 선택) → 201, 이름 중복 409 |
 | GET | `/api/summary` | 전체 / 미완료 / 완료 / 기한 지남 개수 |
+
+Supabase 모드에서는 `/api/config`를 뺀 모든 API에 `Authorization: Bearer <access token>`이 필요하다 (없거나 만료되면 401).
 
 ## 9. 범위 밖
 
-- 로그인·사용자 구분 (Supabase Auth)과 사용자별 RLS 정책
-- 카테고리·사이트 추가/삭제 화면
+- 로컬 SQLite 모드의 로그인 (과제 기본 실행은 로그인 없이)
+- 카테고리 추가·삭제, 사이트 수정·삭제 화면
+- Google 외 로그인 방법 (이메일·GitHub 등)
 - GitHub / Vercel / Supabase API 연동, 자동 상태 감시
 - 반복 점검 주기, 알림, 배포 이력
 - 기존 운영 저장소·Supabase 프로젝트 접근 또는 수정
 
 ## 10. 향후 확장
 
-1. Supabase Auth 로그인 + `user_id` 컬럼 + 사용자별 RLS 정책
-2. 카테고리·사이트 관리 화면
+1. 사용자별 카테고리, 사이트 수정·삭제 화면
+2. 여러 사람이 한 사이트를 함께 관리하는 팀 기능
 3. 정기 점검 주기, 마지막 점검일, 다음 점검 예정일 자동 계산
 4. GitHub·Vercel API로 배포 상태 자동 조회
 
@@ -193,6 +214,10 @@ SQLite와 Postgres의 차이
 | Supabase 실제 연결 | 새 프로젝트에서 추가·조회·수정·완료 토글·삭제·필터, 잘못된 입력 400, 없는 항목 404 | 통과 |
 | Supabase 권한 문제 | 처음에 `permission denied (42501)` 발생 → `service_role` GRANT 추가로 해결 | 해결 |
 | Vercel 배포 | 실제 사이트에서 추가·완료 토글·수정·삭제, 빈 제목 400, 브라우저 코드에 키 없음 | 통과 |
+| v2 SQL (PGlite) | v1 DB → `setup.sql` 2회 업그레이드, `claim.sql`로 기존 4건 이전, 사용자 A·B 분리: B는 A의 항목·사이트 0건 조회, 수정·삭제 0건, A 사이트 연결·A로 위장 추가 거부(42501), 같은 사이트 이름은 사람마다 허용·본인 중복 거부, 카테고리 쓰기 거부, 비로그인 조회 거부 | 통과 |
+| v2 서버 | SQLite 모드는 로그인 없이 동작, 사이트 추가·중복 409·잘못된 주소 400; Supabase 모드는 토큰 없으면 401 | 통과 |
+| v2 화면 | 로그인 전 로그인 화면만 표시 | 통과 |
+| v2 실제 로그인 | Google 로그인 → 내 데이터만 보임 → 로그아웃 | 배포 후 확인 |
 
 ## 12. 완료 기준 (과제 제출 체크리스트)
 
@@ -203,3 +228,4 @@ SQLite와 Postgres의 차이
 - [x] README에 실행 방법이 적혀 있다
 - [x] Supabase 새 프로젝트에 연결해 같은 기능이 동작한다
 - [x] Vercel에 배포해 인터넷에서 접속할 수 있다
+- [ ] Google 로그인 후 사람마다 자기 데이터만 보인다 (v2)

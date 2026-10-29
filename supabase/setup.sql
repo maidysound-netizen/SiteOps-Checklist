@@ -1,19 +1,19 @@
--- SiteOps Checklist — Supabase(Postgres) 스키마 + 예시 데이터
+-- SiteOps Checklist — Supabase(Postgres) 스키마 v2 (Google 로그인 + 사용자별 데이터)
 -- 실행: Supabase 대시보드 → SQL Editor → 이 파일 내용을 붙여넣고 Run
--- 여러 번 실행해도 안전합니다 (이미 있는 테이블·데이터는 건너뜀).
--- db/schema.sql(SQLite)과 같은 구조를 Postgres 문법으로 옮긴 것입니다.
+-- 여러 번 실행해도 안전합니다. 새 프로젝트에도, v1(로그인 없음) DB에도 그대로 실행하면 됩니다.
+-- db/schema.sql(SQLite)과 같은 구조를 Postgres 문법으로 옮기고, 사용자 구분을 더한 것입니다.
 
 -- ---------- 테이블 ----------
 
--- 관리 대상 사이트
+-- 관리 대상 사이트 (사용자별)
 create table if not exists public.sites (
   id         bigint generated always as identity primary key,
-  name       text        not null unique check (length(trim(name)) > 0),
+  name       text        not null check (length(trim(name)) > 0),
   url        text,
   created_at timestamptz not null default now()
 );
 
--- 점검 분류 (추가 기능 1)
+-- 점검 분류 (추가 기능 1) — 모든 사용자 공통
 create table if not exists public.categories (
   id         bigint generated always as identity primary key,
   name       text        not null unique check (length(trim(name)) > 0),
@@ -22,7 +22,7 @@ create table if not exists public.categories (
   created_at timestamptz not null default now()
 );
 
--- 점검 항목 (Todo)
+-- 점검 항목 (Todo, 사용자별)
 create table if not exists public.todos (
   id           bigint generated always as identity primary key,
   title        text        not null check (length(trim(title)) between 1 and 100),
@@ -36,6 +36,19 @@ create table if not exists public.todos (
   updated_at   timestamptz not null default now()
 );
 
+-- ---------- 사용자 구분 (v2) ----------
+-- 행을 만든 로그인 사용자. 값을 보내지 않아도 auth.uid()가 자동으로 들어간다.
+-- 탈퇴(auth.users 삭제) 시 그 사람의 데이터도 함께 삭제된다.
+alter table public.sites add column if not exists user_id uuid
+  default auth.uid() references auth.users(id) on delete cascade;
+alter table public.todos add column if not exists user_id uuid
+  default auth.uid() references auth.users(id) on delete cascade;
+
+-- 사이트 이름은 사용자마다 따로 중복 금지 (v1의 전체 unique 제거)
+alter table public.sites drop constraint if exists sites_name_key;
+create unique index if not exists sites_user_name_key on public.sites (user_id, name);
+
+create index if not exists idx_todos_user       on public.todos (user_id);
 create index if not exists idx_todos_status_due on public.todos (is_done, due_date);
 create index if not exists idx_todos_category   on public.todos (category_id);
 create index if not exists idx_todos_site       on public.todos (site_id);
@@ -66,7 +79,7 @@ before insert or update on public.todos
 for each row execute function public.todos_set_timestamps();
 
 -- ---------- 목록 화면용 뷰 ----------
--- security_invoker: 뷰를 조회하는 사람의 권한(RLS)을 그대로 따른다
+-- security_invoker: 뷰를 조회하는 사람의 권한(RLS)을 그대로 따른다 → 내 항목만 보인다
 create or replace view public.todo_list
 with (security_invoker = true) as
 select
@@ -85,25 +98,42 @@ left join public.sites      s on s.id = t.site_id
 left join public.categories c on c.id = t.category_id;
 
 -- ---------- 보안: RLS ----------
--- 정책(policy)을 만들지 않았으므로 공개 키(anon/publishable)로는 읽기·쓰기 모두 차단된다.
--- 서버는 secret 키로 접속하므로 RLS를 우회해 정상 동작한다.
--- 사용자별 접근 허용(Auth + RLS 정책)은 v2에서 추가한다.
+-- 로그인한 사용자(authenticated)는 자기 행만 읽고 쓸 수 있다.
+-- 로그인하지 않은 공개 키(anon)에는 정책도 권한도 없으므로 모두 차단된다.
 alter table public.sites      enable row level security;
 alter table public.categories enable row level security;
 alter table public.todos      enable row level security;
 
--- 서버(secret 키 = service_role)에만 테이블 권한 부여.
--- 최근 Supabase 프로젝트는 SQL로 만든 테이블에 권한을 자동으로 주지 않는다.
-grant usage on schema public to service_role;
+drop policy if exists "own sites" on public.sites;
+create policy "own sites" on public.sites
+  for all to authenticated
+  using (user_id = (select auth.uid()))
+  with check (user_id = (select auth.uid()));
+
+-- 항목에 연결하는 사이트도 내 사이트여야 한다 (남의 사이트 id를 붙이는 것 방지)
+drop policy if exists "own todos" on public.todos;
+create policy "own todos" on public.todos
+  for all to authenticated
+  using (user_id = (select auth.uid()))
+  with check (
+    user_id = (select auth.uid())
+    and (site_id is null or exists (select 1 from public.sites s where s.id = site_id))
+  );
+
+drop policy if exists "read categories" on public.categories;
+create policy "read categories" on public.categories
+  for select to authenticated
+  using (true);
+
+-- 테이블 권한. 최근 Supabase 프로젝트는 SQL로 만든 테이블에 권한을 자동으로 주지 않는다.
+grant usage on schema public to authenticated, service_role;
+grant select, insert, update, delete on public.sites, public.todos to authenticated;
+grant select on public.categories, public.todo_list to authenticated;
 grant select, insert, update, delete on public.sites, public.categories, public.todos to service_role;
 grant select on public.todo_list to service_role;
 
 -- ---------- 예시 데이터 ----------
-
-insert into public.sites (name) values
-  ('Takako World'),
-  ('King''s St.')
-on conflict (name) do nothing;
+-- 카테고리만 넣는다. 사이트와 점검 항목은 로그인한 사용자가 직접 만든다.
 
 insert into public.categories (name, color, sort_order) values
   ('보안',   '#dc2626', 1),
@@ -112,18 +142,3 @@ insert into public.categories (name, color, sort_order) values
   ('DNS',    '#9333ea', 4),
   ('콘텐츠', '#d97706', 5)
 on conflict (name) do nothing;
-
--- 점검 항목이 하나도 없을 때만 예시 항목을 넣는다
-insert into public.todos (title, site_id, category_id, due_date, is_done)
-select v.title,
-       (select id from public.sites      where name = v.site),
-       (select id from public.categories where name = v.category),
-       (now() at time zone 'Asia/Seoul')::date + v.due_offset,
-       v.is_done
-from (values
-  ('관리자 로그인 권한 점검',        'Takako World', '보안', -1,              false),
-  ('SFX 번역 컨트롤 배포 확인',      'Takako World', '배포',  0,              false),
-  ('게임 데이터 백업 방식 검토',     'King''s St.',  '백업',  7,              false),
-  ('GitHub 저장소 비공개 설정 확인', 'Takako World', '보안',  null::integer, true)
-) as v(title, site, category, due_offset, is_done)
-where not exists (select 1 from public.todos);
