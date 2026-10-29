@@ -35,7 +35,7 @@
 | 추가 기능 2 — 마감일 | 기한 지정, 기한 지남·오늘 마감·D-n 표시, 마감일순 정렬 | 완료 |
 | (보조) 사이트 분류 | 항목이 속한 사이트 지정, 사이트 필터 | 완료 |
 | SQLite | 로컬 파일에 영구 저장 (재시작 후에도 유지) | 완료 |
-| Supabase 연동 | 같은 API·화면을 Supabase(Postgres)에 저장 | 코드 완료, 실제 프로젝트 연결 테스트 대기 |
+| Supabase 연동 | 같은 API·화면을 Supabase(Postgres)에 저장 | 완료 |
 
 ## 4. 기능 요구사항
 
@@ -98,6 +98,7 @@
 - **XSS 방지**: 화면에 사용자 입력을 넣을 때 `textContent`만 사용한다 (`innerHTML` 미사용).
 - **비밀 키 관리**: Supabase secret 키는 서버의 `.env`에만 두고 `.gitignore`로 저장소에서 제외한다. 브라우저 코드에는 키가 없다.
 - **Supabase 접근 제한 (RLS)**: 세 테이블 모두 RLS를 켜고 정책은 만들지 않는다. 공개 키(anon/publishable)로는 읽기·쓰기가 모두 막히고 secret 키를 쓰는 서버만 접근한다. 뷰는 `security_invoker`로 만들어 RLS를 우회하지 못하게 한다.
+- **테이블 권한 (GRANT)**: 최근 Supabase 프로젝트는 SQL로 만든 테이블에 권한을 자동으로 주지 않으므로, `setup.sql`에서 `service_role`에만 `select/insert/update/delete` 권한을 명시적으로 준다.
 - **오류 응답**: JSON `{ "error": "한국어 메시지" }` + 400 / 404 / 500 상태 코드.
 - **화면**: 휴대폰 폭(375px)에서 가로 스크롤 없이 표시, 시스템 다크 모드 지원.
 
@@ -189,7 +190,8 @@ SQLite와 Postgres의 차이
 | Supabase SQL | PGlite(Postgres)에서 `setup.sql` 2회 실행 — 중복 없음, 트리거·제약 조건·한국 날짜 기준 동작 | 통과 |
 | Supabase RLS | 공개 키 권한으로 조회 0건, 추가 거부 | 통과 |
 | Supabase 시작 오류 | 키 누락·잘못된 주소 시 안내 메시지 후 중단 | 통과 |
-| Supabase 실제 연결 | 새 프로젝트에서 CRUD | **대기** (`.env` 설정 필요) |
+| Supabase 실제 연결 | 새 프로젝트에서 추가·조회·수정·완료 토글·삭제·필터, 잘못된 입력 400, 없는 항목 404 | 통과 |
+| Supabase 권한 문제 | 처음에 `permission denied (42501)` 발생 → `service_role` GRANT 추가로 해결 | 해결 |
 
 ## 12. 완료 기준 (과제 제출 체크리스트)
 
@@ -198,4 +200,4 @@ SQLite와 Postgres의 차이
 - [x] 마감일 지정·표시·정렬이 동작한다
 - [x] 서버를 재시작해도 데이터가 유지된다
 - [x] README에 실행 방법이 적혀 있다
-- [ ] Supabase 새 프로젝트에 연결해 같은 기능이 동작한다
+- [x] Supabase 새 프로젝트에 연결해 같은 기능이 동작한다

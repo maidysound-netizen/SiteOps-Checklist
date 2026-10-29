@@ -92,6 +92,12 @@ alter table public.sites      enable row level security;
 alter table public.categories enable row level security;
 alter table public.todos      enable row level security;
 
+-- 서버(secret 키 = service_role)에만 테이블 권한 부여.
+-- 최근 Supabase 프로젝트는 SQL로 만든 테이블에 권한을 자동으로 주지 않는다.
+grant usage on schema public to service_role;
+grant select, insert, update, delete on public.sites, public.categories, public.todos to service_role;
+grant select on public.todo_list to service_role;
+
 -- ---------- 예시 데이터 ----------
 
 insert into public.sites (name) values

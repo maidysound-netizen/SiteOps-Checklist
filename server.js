@@ -4,16 +4,18 @@ import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { HttpError, notFound } from './lib/errors.js';
-import { createSqliteStore } from './lib/store-sqlite.js';
-import { createSupabaseStore } from './lib/store-supabase.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT ?? 3000);
+const ON_VERCEL = Boolean(process.env.VERCEL);
 
 // ---------- 저장소 선택 ----------
-function createStore() {
+// 쓰는 저장소만 불러온다 (Vercel에는 SQLite 파일을 쓸 수 없음)
+async function createStore() {
   const driver = process.env.DB_DRIVER ?? 'sqlite';
   if (driver === 'sqlite') {
+    if (ON_VERCEL) throw new Error('Vercel에서는 SQLite를 쓸 수 없습니다. 환경 변수에 DB_DRIVER=supabase를 설정해 주세요.');
+    const { createSqliteStore } = await import('./lib/store-sqlite.js');
     return createSqliteStore({
       dbPath: process.env.DB_PATH ?? path.join(ROOT, 'db', 'siteops.db'),
       sqlDir: path.join(ROOT, 'db'),
@@ -22,16 +24,15 @@ function createStore() {
   if (driver === 'supabase') {
     const { SUPABASE_URL: url, SUPABASE_SECRET_KEY: key } = process.env;
     if (!url || !key) {
-      console.error('DB_DRIVER=supabase 이면 .env에 SUPABASE_URL과 SUPABASE_SECRET_KEY가 필요합니다. (.env.example 참고)');
-      process.exit(1);
+      throw new Error('DB_DRIVER=supabase 이면 SUPABASE_URL과 SUPABASE_SECRET_KEY가 필요합니다. (.env.example 참고)');
     }
+    const { createSupabaseStore } = await import('./lib/store-supabase.js');
     return createSupabaseStore({ url, key });
   }
-  console.error(`알 수 없는 DB_DRIVER: ${driver} (sqlite 또는 supabase)`);
-  process.exit(1);
+  throw new Error(`알 수 없는 DB_DRIVER: ${driver} (sqlite 또는 supabase)`);
 }
 
-const store = createStore();
+const store = await createStore();
 
 // ---------- 입력 검증 ----------
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -142,14 +143,18 @@ app.use((err, req, res, next) => {
 });
 
 // ---------- 시작 ----------
-try {
-  await store.check?.();
-} catch (err) {
-  console.error(`DB 연결 확인 실패: ${err.message}`);
-  console.error('Supabase SQL Editor에서 supabase/setup.sql을 실행했는지, URL과 키가 맞는지 확인해 주세요.');
-  process.exit(1);
+// Vercel은 export한 app을 직접 실행하므로 listen하지 않는다
+if (!ON_VERCEL) {
+  try {
+    await store.check?.();
+  } catch (err) {
+    console.error(`DB 연결 확인 실패: ${err.message}`);
+    process.exit(1);
+  }
+
+  app.listen(PORT, () => {
+    console.log(`SiteOps Checklist → http://localhost:${PORT}  (DB: ${store.label})`);
+  });
 }
 
-app.listen(PORT, () => {
-  console.log(`SiteOps Checklist → http://localhost:${PORT}  (DB: ${store.label})`);
-});
+export default app;

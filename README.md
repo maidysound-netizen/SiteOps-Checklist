@@ -40,6 +40,7 @@ npm start
 
 보안 메모
 
+- `permission denied for table ...` 오류가 나면 `setup.sql`의 `grant ... to service_role` 부분이 실행됐는지 확인하세요. (최근 Supabase 프로젝트는 테이블 권한을 자동으로 주지 않습니다)
 - 세 테이블 모두 RLS를 켜고 정책은 만들지 않았습니다. 공개 키(anon/publishable)로는 읽기·쓰기가 모두 막히고, secret 키를 가진 서버만 접근합니다.
 - secret 키는 `.env`에만 두며 `.gitignore`로 GitHub에 올라가지 않습니다. 브라우저 코드(`public/`)에는 키가 없습니다.
 - 다시 SQLite로 돌아가려면 `.env`에서 `DB_DRIVER=sqlite`로 바꿉니다.
