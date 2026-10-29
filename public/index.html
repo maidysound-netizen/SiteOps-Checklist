@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SiteOps Checklist</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="container">
+    <header class="page-header">
+      <h1>SiteOps Checklist</h1>
+      <p class="subtitle">Personal Website Operations Manager</p>
+    </header>
+
+    <section class="summary" aria-label="요약">
+      <div class="card"><span class="label">전체 점검</span><strong id="sum-total">0</strong></div>
+      <div class="card"><span class="label">미완료</span><strong id="sum-open">0</strong></div>
+      <div class="card"><span class="label">완료</span><strong id="sum-done">0</strong></div>
+      <div class="card danger"><span class="label">기한 지남</span><strong id="sum-overdue">0</strong></div>
+    </section>
+
+    <section class="panel">
+      <h2>새 점검 항목 추가</h2>
+      <form id="add-form" class="todo-form" autocomplete="off">
+        <label class="field wide">
+          <span>점검 항목</span>
+          <input name="title" maxlength="100" required placeholder="예: 관리자 로그인 권한 점검">
+        </label>
+        <label class="field">
+          <span>사이트</span>
+          <select name="site_id" data-options="sites"></select>
+        </label>
+        <label class="field">
+          <span>분류</span>
+          <select name="category_id" data-options="categories"></select>
+        </label>
+        <label class="field">
+          <span>마감일</span>
+          <input name="due_date" type="date">
+        </label>
+        <label class="field wide">
+          <span>메모</span>
+          <input name="memo" placeholder="선택 사항">
+        </label>
+        <button type="submit" class="btn primary">점검 항목 추가</button>
+      </form>
+      <p id="add-error" class="error" role="alert"></p>
+    </section>
+
+    <section class="panel">
+      <div class="filters">
+        <div id="category-tabs" class="tabs" role="tablist" aria-label="분류 필터"></div>
+        <div class="filter-selects">
+          <select id="filter-site" aria-label="사이트 필터"></select>
+          <select id="filter-status" aria-label="상태 필터">
+            <option value="all">모든 상태</option>
+            <option value="open">미완료</option>
+            <option value="done">완료</option>
+            <option value="overdue">기한 지남</option>
+          </select>
+        </div>
+      </div>
+      <ul id="todo-list" class="todo-list"></ul>
+      <p id="empty" class="empty" hidden>조건에 맞는 점검 항목이 없습니다.</p>
+    </section>
+  </main>
+
+  <dialog id="edit-dialog">
+    <form id="edit-form" class="todo-form" method="dialog" autocomplete="off">
+      <h2>점검 항목 수정</h2>
+      <label class="field wide">
+        <span>점검 항목</span>
+        <input name="title" maxlength="100" required>
+      </label>
+      <label class="field">
+        <span>사이트</span>
+        <select name="site_id" data-options="sites"></select>
+      </label>
+      <label class="field">
+        <span>분류</span>
+        <select name="category_id" data-options="categories"></select>
+      </label>
+      <label class="field">
+        <span>마감일</span>
+        <input name="due_date" type="date">
+      </label>
+      <label class="field wide">
+        <span>메모</span>
+        <textarea name="memo" rows="3"></textarea>
+      </label>
+      <p id="edit-error" class="error wide" role="alert"></p>
+      <div class="dialog-actions wide">
+        <button type="button" class="btn" id="edit-cancel">취소</button>
+        <button type="submit" class="btn primary">저장</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>

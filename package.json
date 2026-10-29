@@ -1,0 +1,20 @@
+{
+  "name": "todo-assignment",
+  "version": "1.0.0",
+  "description": "SiteOps Checklist — 개인 웹사이트 운영 점검 Todo 앱 (SQLite)",
+  "private": true,
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server.js",
+    "dev": "node --env-file-if-exists=.env --watch server.js",
+    "db:reset": "node -e \"require('fs').rmSync('db/siteops.db',{force:true})\""
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.118.0",
+    "express": "^5.3.0"
+  }
+}

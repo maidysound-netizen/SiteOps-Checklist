@@ -1,0 +1,188 @@
+:root {
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --text: #1f2933;
+  --muted: #6b7280;
+  --border: #e3e6ea;
+  --primary: #2563eb;
+  --primary-text: #ffffff;
+  --danger: #dc2626;
+  --warning: #d97706;
+  --radius: 10px;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111418;
+    --surface: #1b1f24;
+    --text: #e6e8eb;
+    --muted: #9aa3ad;
+    --border: #2c323a;
+    --primary: #4f8cff;
+    --danger: #f87171;
+    --warning: #fbbf24;
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  line-height: 1.5;
+}
+
+.container {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 32px 16px 64px;
+}
+
+.page-header h1 { margin: 0; font-size: 1.8rem; }
+.subtitle { margin: 4px 0 24px; color: var(--muted); }
+
+h2 { margin: 0 0 12px; font-size: 1.05rem; }
+
+/* 요약 카드 */
+.summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+.card .label { display: block; color: var(--muted); font-size: 0.85rem; }
+.card strong { font-size: 1.8rem; font-variant-numeric: tabular-nums; }
+.card.danger strong { color: var(--danger); }
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+/* 폼 */
+.todo-form {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  align-items: end;
+}
+.field { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; color: var(--muted); }
+.wide { grid-column: 1 / -1; }
+
+input, select, textarea {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  width: 100%;
+}
+input:focus, select:focus, textarea:focus { outline: 2px solid var(--primary); outline-offset: -1px; }
+
+.btn {
+  font: inherit;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 14px;
+}
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--primary); border-color: var(--primary); color: var(--primary-text); font-weight: 600; }
+.todo-form > .btn.primary { grid-column: 1 / -1; }
+.btn.small { padding: 4px 10px; font-size: 0.85rem; }
+.btn.danger { color: var(--danger); }
+
+.error { color: var(--danger); margin: 8px 0 0; min-height: 0; }
+.error:empty { display: none; }
+
+/* 필터 */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.tab {
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  border-radius: 999px;
+  padding: 4px 12px;
+}
+.tab.active { background: var(--text); color: var(--surface); border-color: var(--text); }
+.filter-selects { display: flex; gap: 8px; }
+.filter-selects select { width: auto; }
+
+/* 목록 */
+.todo-list { list-style: none; margin: 0; padding: 0; }
+.todo {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+.todo:first-child { border-top: 0; }
+.todo input[type="checkbox"] { width: 18px; height: 18px; margin-top: 3px; flex-shrink: 0; accent-color: var(--primary); }
+.todo-body { flex: 1; min-width: 0; }
+.todo-title { font-weight: 600; overflow-wrap: anywhere; }
+.todo.done .todo-title { text-decoration: line-through; color: var(--muted); }
+.todo-meta { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; font-size: 0.82rem; color: var(--muted); margin-top: 2px; }
+.todo-memo { margin: 4px 0 0; font-size: 0.88rem; color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+.todo-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+.badge {
+  --badge: var(--muted);
+  color: var(--badge);
+  border: 1px solid var(--badge);
+  border-radius: 999px;
+  padding: 0 8px;
+  font-weight: 600;
+}
+.due.overdue { color: var(--danger); font-weight: 600; }
+.due.today { color: var(--warning); font-weight: 600; }
+
+.empty { color: var(--muted); text-align: center; margin: 16px 0 0; }
+
+/* 수정 대화상자 */
+dialog {
+  width: min(560px, calc(100% - 32px));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  padding: 20px;
+}
+dialog::backdrop { background: rgb(0 0 0 / 0.45); }
+dialog h2 { grid-column: 1 / -1; margin: 0; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+@media (max-width: 640px) {
+  .summary { grid-template-columns: repeat(2, 1fr); }
+  .todo-form { grid-template-columns: 1fr; }
+  .filters { flex-direction: column; }
+  .filter-selects select { flex: 1; }
+  .todo { flex-wrap: wrap; }
+  .todo-actions { width: 100%; justify-content: flex-end; }
+}

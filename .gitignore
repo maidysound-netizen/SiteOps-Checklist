@@ -1,0 +1,12 @@
+node_modules/
+
+# 로컬 SQLite 데이터 (schema.sql / seed.sql로 다시 만들 수 있음)
+db/*.db
+db/*.db-*
+
+# macOS (외장 드라이브의 AppleDouble 파일 포함)
+.DS_Store
+._*
+
+# 비밀 키
+.env
