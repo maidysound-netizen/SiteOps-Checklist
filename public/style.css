@@ -195,3 +195,8 @@ dialog h2 { grid-column: 1 / -1; margin: 0; }
   .todo { flex-wrap: wrap; }
   .todo-actions { width: 100%; justify-content: flex-end; }
 }
+.policy h2 { font-size: 1.05rem; margin: 24px 0 8px; }
+.policy p, .policy li { line-height: 1.7; }
+.policy a { color: var(--primary); }
+.site-footer { text-align: center; margin: 24px 0; font-size: 0.85rem; }
+.site-footer a { color: var(--muted); }
