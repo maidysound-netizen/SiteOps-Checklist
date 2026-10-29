@@ -6,6 +6,7 @@
 | --- | --- | --- |
 | v1.0 | 2026-10-29 | 기본 CRUD + 카테고리 + 마감일, 로컬 SQLite 저장 |
 | v1.1 | 2026-10-29 | Supabase(Postgres) 저장소 선택 기능 추가, RLS 적용 |
+| v1.2 | 2026-10-29 | Vercel 배포 (https://siteops-checklist.vercel.app) |
 
 ## 1. 개요
 
@@ -14,6 +15,7 @@
 | 제품명 | SiteOps Checklist |
 | 한 줄 설명 | 여러 개인 사이트(GitHub, Vercel, Supabase, DNS, Blogger 등)의 운영 점검 항목을 등록하고 완료 여부를 추적하는 Todo 앱 |
 | 사용자 | 본인 1명 (로그인 없음) |
+| 배포 주소 | https://siteops-checklist.vercel.app (Vercel, Supabase 저장소) |
 | 저장소 | 기본: 로컬 SQLite 파일 (`db/siteops.db`) / 선택: Supabase (`.env`에서 `DB_DRIVER=supabase`) |
 | 기술 스택 | Node.js 22.13+ · Express 5 · `node:sqlite`(내장) · `@supabase/supabase-js` · HTML/CSS/JavaScript(프레임워크 없음) |
 | 범위 원칙 | 사람이 직접 점검 결과를 등록·기록한다. 외부 서비스 API 연동, 기존 운영 저장소·Supabase 프로젝트 수정은 **하지 않는다**. Supabase는 이 앱 전용 **새 프로젝트**만 사용한다 |
@@ -168,15 +170,13 @@ SQLite와 Postgres의 차이
 - GitHub / Vercel / Supabase API 연동, 자동 상태 감시
 - 반복 점검 주기, 알림, 배포 이력
 - 기존 운영 저장소·Supabase 프로젝트 접근 또는 수정
-- 배포 (Vercel 등)
 
 ## 10. 향후 확장
 
 1. Supabase Auth 로그인 + `user_id` 컬럼 + 사용자별 RLS 정책
 2. 카테고리·사이트 관리 화면
 3. 정기 점검 주기, 마지막 점검일, 다음 점검 예정일 자동 계산
-4. Vercel 배포 (Supabase 모드)
-5. GitHub·Vercel API로 배포 상태 자동 조회
+4. GitHub·Vercel API로 배포 상태 자동 조회
 
 ## 11. 테스트 결과
 
@@ -192,6 +192,7 @@ SQLite와 Postgres의 차이
 | Supabase 시작 오류 | 키 누락·잘못된 주소 시 안내 메시지 후 중단 | 통과 |
 | Supabase 실제 연결 | 새 프로젝트에서 추가·조회·수정·완료 토글·삭제·필터, 잘못된 입력 400, 없는 항목 404 | 통과 |
 | Supabase 권한 문제 | 처음에 `permission denied (42501)` 발생 → `service_role` GRANT 추가로 해결 | 해결 |
+| Vercel 배포 | 실제 사이트에서 추가·완료 토글·수정·삭제, 빈 제목 400, 브라우저 코드에 키 없음 | 통과 |
 
 ## 12. 완료 기준 (과제 제출 체크리스트)
 
@@ -201,3 +202,4 @@ SQLite와 Postgres의 차이
 - [x] 서버를 재시작해도 데이터가 유지된다
 - [x] README에 실행 방법이 적혀 있다
 - [x] Supabase 새 프로젝트에 연결해 같은 기능이 동작한다
+- [x] Vercel에 배포해 인터넷에서 접속할 수 있다

@@ -2,6 +2,8 @@
 
 개인 웹사이트 운영 점검 항목을 관리하는 Todo 앱입니다. (학교 과제 — To Do App)
 
+**배포 주소: https://siteops-checklist.vercel.app** (Vercel + Supabase)
+
 - 기본 기능: 점검 항목 추가 · 조회 · 수정 · 삭제, 완료 체크
 - 추가 기능: **카테고리**(보안·배포·백업·DNS·콘텐츠) 지정과 필터, **마감일** 지정과 기한 지남·오늘 마감·D-n 표시, 마감일순 정렬
 - 저장소: 로컬 SQLite 파일 (`db/siteops.db`)
