@@ -1,38 +1,17 @@
-// SiteOps Checklist — Express 서버
-// 저장소: 기본 SQLite(로그인 없음), .env에 DB_DRIVER=supabase 이면 Supabase + Google 로그인
+// SiteOps Checklist — Express 서버 (나 혼자 쓰는 로컬 앱, SQLite 저장)
 import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { HttpError, notFound, unauthorized } from './lib/errors.js';
+import { HttpError, notFound } from './lib/errors.js';
+import { createSqliteStore } from './lib/store-sqlite.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT ?? 3000);
-const ON_VERCEL = Boolean(process.env.VERCEL);
 
-// ---------- 저장소 선택 ----------
-// 쓰는 저장소만 불러온다 (Vercel에는 SQLite 파일을 쓸 수 없음)
-async function createStore() {
-  const driver = process.env.DB_DRIVER ?? 'sqlite';
-  if (driver === 'sqlite') {
-    if (ON_VERCEL) throw new Error('Vercel에서는 SQLite를 쓸 수 없습니다. 환경 변수에 DB_DRIVER=supabase를 설정해 주세요.');
-    const { createSqliteStore } = await import('./lib/store-sqlite.js');
-    return createSqliteStore({
-      dbPath: process.env.DB_PATH ?? path.join(ROOT, 'db', 'siteops.db'),
-      sqlDir: path.join(ROOT, 'db'),
-    });
-  }
-  if (driver === 'supabase') {
-    const { SUPABASE_URL: url, SUPABASE_PUBLISHABLE_KEY: key } = process.env;
-    if (!url || !key) {
-      throw new Error('DB_DRIVER=supabase 이면 SUPABASE_URL과 SUPABASE_PUBLISHABLE_KEY가 필요합니다. (.env.example 참고)');
-    }
-    const { createSupabaseStore } = await import('./lib/store-supabase.js');
-    return createSupabaseStore({ url, key });
-  }
-  throw new Error(`알 수 없는 DB_DRIVER: ${driver} (sqlite 또는 supabase)`);
-}
-
-const store = await createStore();
+const store = createSqliteStore({
+  dbPath: process.env.DB_PATH ?? path.join(ROOT, 'db', 'siteops.db'),
+  sqlDir: path.join(ROOT, 'db'),
+});
 
 // ---------- 입력 검증 ----------
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -98,28 +77,11 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(ROOT, 'public')));
 
-// 화면이 로그인 화면을 띄울지 결정하는 값 (publishable 키는 공개용이라 내려줘도 안전)
-app.get('/api/config', (req, res) => {
-  res.json(store.auth ? { auth: true, ...store.publicConfig } : { auth: false });
-});
-
-// 로그인 모드: 요청마다 그 사용자의 토큰으로 저장소를 만든다 → DB RLS가 자기 데이터만 허용
-app.use('/api', (req, res, next) => {
-  if (!store.auth) {
-    req.store = store;
-    return next();
-  }
-  const token = req.get('authorization')?.match(/^Bearer (\S+)$/)?.[1];
-  if (!token) throw unauthorized();
-  req.store = store.forUser(token);
-  next();
-});
-
 app.get('/api/todos', async (req, res) => {
   const status = req.query.status ?? 'all';
   if (!STATUSES.includes(status)) throw new HttpError(400, '상태 필터가 올바르지 않습니다.');
   res.json(
-    await req.store.listTodos({
+    await store.listTodos({
       site: toOptionalId(req.query.site, '사이트'),
       category: toOptionalId(req.query.category, '카테고리'),
       status,
@@ -128,43 +90,43 @@ app.get('/api/todos', async (req, res) => {
 });
 
 app.get('/api/todos/:id', async (req, res) => {
-  const todo = await req.store.getTodo(parseId(req.params.id));
+  const todo = await store.getTodo(parseId(req.params.id));
   if (!todo) throw notFound();
   res.json(todo);
 });
 
 app.post('/api/todos', async (req, res) => {
-  res.status(201).json(await req.store.createTodo(parseTodoInput(req.body)));
+  res.status(201).json(await store.createTodo(parseTodoInput(req.body)));
 });
 
 app.patch('/api/todos/:id', async (req, res) => {
   const id = parseId(req.params.id);
   const input = parseTodoInput(req.body, { partial: true });
   if (Object.keys(input).length === 0) throw new HttpError(400, '수정할 내용이 없습니다.');
-  const todo = await req.store.updateTodo(id, input);
+  const todo = await store.updateTodo(id, input);
   if (!todo) throw notFound();
   res.json(todo);
 });
 
 app.delete('/api/todos/:id', async (req, res) => {
-  if (!(await req.store.deleteTodo(parseId(req.params.id)))) throw notFound();
+  if (!(await store.deleteTodo(parseId(req.params.id)))) throw notFound();
   res.status(204).end();
 });
 
 app.get('/api/categories', async (req, res) => {
-  res.json(await req.store.listCategories());
+  res.json(await store.listCategories());
 });
 
 app.get('/api/sites', async (req, res) => {
-  res.json(await req.store.listSites());
+  res.json(await store.listSites());
 });
 
 app.post('/api/sites', async (req, res) => {
-  res.status(201).json(await req.store.createSite(parseSiteInput(req.body)));
+  res.status(201).json(await store.createSite(parseSiteInput(req.body)));
 });
 
 app.get('/api/summary', async (req, res) => {
-  res.json(await req.store.summary());
+  res.json(await store.summary());
 });
 
 app.use('/api', (req, res) => {
@@ -180,16 +142,9 @@ app.use((err, req, res, next) => {
 });
 
 // ---------- 시작 ----------
-// Vercel은 export한 app을 직접 실행하므로 listen하지 않는다 (테스트도 NO_LISTEN=1로 직접 띄움)
-if (!ON_VERCEL && !process.env.NO_LISTEN) {
-  try {
-    await store.check?.();
-  } catch (err) {
-    console.error(`DB 연결 확인 실패: ${err.message}`);
-    process.exit(1);
-  }
-
-  app.listen(PORT, () => {
+// 테스트는 NO_LISTEN=1로 불러와 직접 띄운다
+if (!process.env.NO_LISTEN) {
+  app.listen(PORT, '127.0.0.1', () => {
     console.log(`SiteOps Checklist → http://localhost:${PORT}  (DB: ${store.label})`);
   });
 }

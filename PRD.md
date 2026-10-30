@@ -11,6 +11,22 @@
 | v2.1 | 2026-10-30 | 서버 비용 문제로 클라우드 Supabase 일시정지 → 로컬 Docker(Supabase CLI)에서 실행 |
 | v2.2 | 2026-10-30 | 파트너 코드 리뷰([Review.md](Review.md)) 반영: 입력 타입 검증, 메모 길이 제한, Supabase 요약을 DB에서 개수만 세기, 자동 테스트(`npm test`) |
 | v2.3 | 2026-10-30 | 과제 종료: 클라우드 Supabase 프로젝트 일시정지·Vercel 배포 종료, 로컬 전용(SQLite / 로컬 Docker Supabase)으로 운영. 파트너 계정은 클라우드에서 삭제 |
+| v3.0 | 2026-10-30 | **나 혼자 쓰는 앱으로 간소화.** Supabase·Google 로그인·Docker·Vercel 관련 코드와 설정을 모두 제거하고 SQLite만 남김 (아래 "0. v3.0 — 나 혼자 쓰기") |
+
+## 0. v3.0 — 나 혼자 쓰기
+
+과제가 끝났다. 이제 이 앱은 **나 혼자, 내 컴퓨터에서만** 쓴다.
+
+| 항목 | 내용 |
+| --- | --- |
+| 이유 | Supabase 무료 요금제는 활성 프로젝트가 2개까지다. **FPS 게임을 만들 자리**가 필요해서 이 앱의 클라우드 프로젝트를 껐다. 혼자 쓰는 점검표에 로그인·클라우드 DB·Docker는 과하다 |
+| 클라우드 정리 | 과제 기간에 가입했던 파트너 계정은 Supabase에서 삭제(항목·사이트도 `on delete cascade`로 함께 삭제), 클라우드 프로젝트는 일시정지, Vercel 배포 종료 |
+| 지운 것 | `lib/store-supabase.js`, `supabase/` 폴더(setup·claim SQL, 로컬 Docker 설정), `public/privacy.html`, Google 로그인 화면·코드, `/api/config`, `@supabase/supabase-js`·Supabase CLI 패키지, `db:start`/`db:stop` 스크립트 |
+| 남긴 것 | 기능 전부(CRUD·카테고리·마감일·사이트·필터·요약), 입력 검증, 자동 테스트, SQLite 저장 |
+| 보안 | 서버는 `127.0.0.1`에서만 열린다 (같은 와이파이의 다른 기기에서도 접속 불가). 로그인이 없으니 외부에 열지 않는다 |
+| 되돌리기 | Supabase·로그인 버전이 다시 필요하면 git의 `v2.3` 커밋(`d4266a8`)에서 꺼내 쓴다 |
+
+아래 1~12절은 과제 기간(v1.0~v2.3)의 기획과 기록이다. Supabase·로그인·배포에 관한 내용은 **v3.0에서 제거됨**.
 
 ## 1. 개요
 
@@ -18,10 +34,10 @@
 | --- | --- |
 | 제품명 | SiteOps Checklist |
 | 한 줄 설명 | 여러 개인 사이트(GitHub, Vercel, Supabase, DNS, Blogger 등)의 운영 점검 항목을 등록하고 완료 여부를 추적하는 Todo 앱 |
-| 사용자 | 본인 1명 (v2.3부터 로컬 전용). 로컬 Docker Supabase: Google 로그인, 각자 자기 데이터만 / 로컬 SQLite: 로그인 없음 |
+| 사용자 | 본인 1명, 로그인 없음 (v3.0) |
 | 배포 주소 | 없음 (v2.3에서 종료. 과제 기간에는 https://siteops-checklist.vercel.app) |
-| 저장소 | 기본: 로컬 SQLite 파일 (`db/siteops.db`) / 선택: Supabase (`.env`에서 `DB_DRIVER=supabase`) |
-| 기술 스택 | Node.js 22.13+ · Express 5 · `node:sqlite`(내장) · `@supabase/supabase-js` · HTML/CSS/JavaScript(프레임워크 없음) |
+| 저장소 | 로컬 SQLite 파일 (`db/siteops.db`). v1.1~v2.3에는 Supabase도 선택 가능했음 |
+| 기술 스택 | Node.js 22.13+ · Express 5 · `node:sqlite`(내장) · HTML/CSS/JavaScript(프레임워크 없음) |
 | 범위 원칙 | 사람이 직접 점검 결과를 등록·기록한다. 외부 서비스 API 연동, 기존 운영 저장소·Supabase 프로젝트 수정은 **하지 않는다**. Supabase는 이 앱 전용 **새 프로젝트**만 사용한다 |
 
 ## 2. 문제 정의
@@ -84,7 +100,7 @@
 | F-30 | 요약 카드 | 전체 / 미완료 / 완료 / 기한 지남 개수 |
 | F-31 | 사이트·상태 필터 | 사이트 선택, 상태(모든 상태 / 미완료 / 완료 / 기한 지남) 선택, 카테고리 탭과 함께 사용 가능 |
 
-### 4.5 저장소 선택 (v1.1)
+### 4.5 저장소 선택 (v1.1 — v3.0에서 SQLite만 남김)
 
 | ID | 기능 | 상세 |
 | --- | --- | --- |
@@ -94,7 +110,7 @@
 
 두 모드는 같은 API 응답 형식을 돌려주므로 화면 코드(`public/`)는 저장소와 무관하다.
 
-### 4.6 로그인과 사용자별 데이터 (v2.0, Supabase 모드)
+### 4.6 로그인과 사용자별 데이터 (v2.0 — v3.0에서 제거, F-53 사이트 추가만 남음)
 
 | ID | 기능 | 상세 |
 | --- | --- | --- |
@@ -179,7 +195,7 @@ SQLite와 Postgres의 차이
 | PATCH | `/api/todos/:id` | 항목 수정(부분) · 완료 토글 (`{"is_done": true}`) |
 | DELETE | `/api/todos/:id` | 항목 삭제 → 204 |
 | GET | `/api/categories` | 카테고리 목록 |
-| GET | `/api/config` | 로그인 모드 여부, Supabase 주소·publishable 키 |
+| ~~GET~~ | ~~`/api/config`~~ | ~~로그인 모드 여부~~ (v3.0에서 제거) |
 | GET | `/api/sites` | 사이트 목록 |
 | POST | `/api/sites` | 사이트 추가 (`name` 필수, `url` 선택) → 201, 이름 중복 409 |
 | GET | `/api/summary` | 전체 / 미완료 / 완료 / 기한 지남 개수 |
@@ -228,6 +244,7 @@ Supabase 모드에서는 `/api/config`를 뺀 모든 API에 `Authorization: Bear
 | v2.2 리뷰 결함 | 리뷰어가 찾은 문제: `is_done: "false"`(문자열)가 완료로 저장, 객체 제목이 `[object Object]`로 저장 → 타입 검사 추가 | 해결 |
 | v2.2 자동 테스트 | `npm test` 18건 통과. 고치기 전 코드로 돌리면 3건 실패(제목 타입, 메모 길이·타입, `is_done` 타입) → 테스트가 결함을 잡는 것 확인 | 통과 |
 | v2.2 마감일 비우기 | 수정 창이 보내는 빈 값('')으로 마감일·사이트·카테고리·메모를 비우면 null로 저장 (테스트 포함) | 통과 |
+| v3.0 간소화 | `npm test` 통과(`/api/config`는 이제 404), 서버가 `127.0.0.1`에서만 열림, 화면에 로그인 없이 바로 목록 표시 | 통과 |
 | v2.2 클라우드 로그인 복구 | Google Cloud에서 예전 Client Secret 삭제 후 배포 사이트 로그인 실패(`Unable to exchange external code`) → Supabase Google 설정에 현재 Secret 저장 후 로그인 확인 | 해결 |
 
 ## 12. 완료 기준 (과제 제출 체크리스트)

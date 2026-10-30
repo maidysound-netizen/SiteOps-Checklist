@@ -8,33 +8,16 @@ const state = {
 
 const $ = (selector) => document.querySelector(selector);
 
-// Supabase 로그인 클라이언트 (DB_DRIVER=supabase 일 때만 사용, SQLite 모드에서는 null)
-const SUPABASE_JS = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/+esm';
-let auth = null;
-
 async function api(path, options = {}) {
-  const headers = { 'Content-Type': 'application/json' };
-  if (auth) {
-    // getSession은 만료가 가까우면 토큰을 새로 받아 준다
-    const { data } = await auth.getSession();
-    if (data.session) headers.Authorization = `Bearer ${data.session.access_token}`;
-  }
   const res = await fetch(path, {
-    headers,
+    headers: { 'Content-Type': 'application/json' },
     ...options,
     body: options.body ? JSON.stringify(options.body) : undefined,
   });
-  if (res.status === 401 && auth) showLogin();
   if (res.status === 204) return null;
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error ?? '요청에 실패했습니다.');
   return data;
-}
-
-function showLogin() {
-  $('#app-view').hidden = true;
-  $('#user-box').hidden = true;
-  $('#login-view').hidden = false;
 }
 
 function el(tag, props = {}, children = []) {
@@ -242,19 +225,6 @@ $('#site-form').addEventListener('submit', async (event) => {
   }
 });
 
-$('#login-google').addEventListener('click', async () => {
-  const { error } = await auth.signInWithOAuth({
-    provider: 'google',
-    options: { redirectTo: location.origin + location.pathname },
-  });
-  if (error) $('#login-error').textContent = error.message;
-});
-
-$('#logout').addEventListener('click', async () => {
-  await auth.signOut();
-  location.reload();
-});
-
 $('#edit-cancel').addEventListener('click', () => $('#edit-dialog').close());
 
 $('#filter-site').addEventListener('change', (event) => {
@@ -268,36 +238,11 @@ $('#filter-status').addEventListener('change', (event) => {
 });
 
 // ---------- 시작 ----------
-// 로그인 모드면 세션을 확인한다. Google에서 돌아온 직후(?code=...)에는 여기서 세션으로 교환된다.
-async function initAuth() {
-  const config = await api('/api/config');
-  if (!config.auth) return true;
-
-  const { createClient } = await import(SUPABASE_JS);
-  auth = createClient(config.supabaseUrl, config.supabaseKey, { auth: { flowType: 'pkce' } }).auth;
-  const { data } = await auth.getSession();
-  if (location.search.includes('code=')) history.replaceState(null, '', location.pathname);
-  if (!data.session) {
-    showLogin();
-    return false;
-  }
-  $('#user-email').textContent = data.session.user.email;
-  $('#user-box').hidden = false;
-  auth.onAuthStateChange((event) => {
-    if (event === 'SIGNED_OUT') showLogin();
-  });
-  return true;
-}
-
 (async () => {
-  if (!(await initAuth())) return;
-  $('#app-view').hidden = false;
   [state.sites, state.categories] = await Promise.all([api('/api/sites'), api('/api/categories')]);
   fillSelects();
   renderTabs();
   await refresh();
 })().catch((err) => {
-  if (!$('#login-view').hidden) return; // 로그인 만료(401) → 로그인 화면이 이미 떠 있음
-  $('#app-view').hidden = false;
   $('#todo-list').replaceChildren(el('li', { className: 'error', textContent: `불러오기 실패: ${err.message}` }));
 });

@@ -4,7 +4,6 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 
 process.env.NO_LISTEN = '1';
-process.env.DB_DRIVER = 'sqlite';
 process.env.DB_PATH = ':memory:';
 const { default: app } = await import('../server.js');
 
@@ -150,7 +149,7 @@ test('사이트 추가 201, 같은 이름 409, http(s)가 아닌 주소 400', as
 });
 
 // ---------- 기타 ----------
-test('SQLite 모드는 로그인 없음, 없는 API는 404', async () => {
-  assert.deepEqual((await call('GET', '/config')).data, { auth: false });
+test('없는 API는 404 (v3.0에서 지운 /api/config 포함)', async () => {
+  assert.equal((await call('GET', '/config')).status, 404);
   assert.equal((await call('GET', '/nope')).status, 404);
 });
