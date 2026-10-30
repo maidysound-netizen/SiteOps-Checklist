@@ -10,6 +10,7 @@
 | v2.0 | 2026-10-29 | Google 로그인(Supabase Auth) + 사용자별 데이터(RLS 정책), 사이트 추가 |
 | v2.1 | 2026-10-30 | 서버 비용 문제로 클라우드 Supabase 일시정지 → 로컬 Docker(Supabase CLI)에서 실행 |
 | v2.2 | 2026-10-30 | 파트너 코드 리뷰([Review.md](Review.md)) 반영: 입력 타입 검증, 메모 길이 제한, Supabase 요약을 DB에서 개수만 세기, 자동 테스트(`npm test`) |
+| v2.3 | 2026-10-30 | 과제 종료: 클라우드 Supabase 프로젝트 일시정지·Vercel 배포 종료, 로컬 전용(SQLite / 로컬 Docker Supabase)으로 운영. 파트너 계정은 클라우드에서 삭제 |
 
 ## 1. 개요
 
@@ -17,8 +18,8 @@
 | --- | --- |
 | 제품명 | SiteOps Checklist |
 | 한 줄 설명 | 여러 개인 사이트(GitHub, Vercel, Supabase, DNS, Blogger 등)의 운영 점검 항목을 등록하고 완료 여부를 추적하는 Todo 앱 |
-| 사용자 | 배포 사이트: Google 계정으로 로그인한 누구나 (각자 자기 데이터만) / 로컬 SQLite: 본인 1명 (로그인 없음) |
-| 배포 주소 | https://siteops-checklist.vercel.app (Vercel, Supabase 저장소) |
+| 사용자 | 본인 1명 (v2.3부터 로컬 전용). 로컬 Docker Supabase: Google 로그인, 각자 자기 데이터만 / 로컬 SQLite: 로그인 없음 |
+| 배포 주소 | 없음 (v2.3에서 종료. 과제 기간에는 https://siteops-checklist.vercel.app) |
 | 저장소 | 기본: 로컬 SQLite 파일 (`db/siteops.db`) / 선택: Supabase (`.env`에서 `DB_DRIVER=supabase`) |
 | 기술 스택 | Node.js 22.13+ · Express 5 · `node:sqlite`(내장) · `@supabase/supabase-js` · HTML/CSS/JavaScript(프레임워크 없음) |
 | 범위 원칙 | 사람이 직접 점검 결과를 등록·기록한다. 외부 서비스 API 연동, 기존 운영 저장소·Supabase 프로젝트 수정은 **하지 않는다**. Supabase는 이 앱 전용 **새 프로젝트**만 사용한다 |

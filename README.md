@@ -2,11 +2,12 @@
 
 개인 웹사이트 운영 점검 항목을 관리하는 Todo 앱입니다. (학교 과제 — To Do App)
 
-**배포 주소: https://siteops-checklist.vercel.app** (Vercel + Supabase, Google 로그인)
+> 과제가 끝나 클라우드 배포(Vercel + Supabase)는 종료했습니다 (v2.3). 지금은 **내 컴퓨터에서만** 실행합니다.
+> 저장소는 SQLite(기본) 또는 로컬 Docker Supabase(Google 로그인)입니다.
 
 - 기본 기능: 점검 항목 추가 · 조회 · 수정 · 삭제, 완료 체크
 - 추가 기능: **카테고리**(보안·배포·백업·DNS·콘텐츠) 지정과 필터, **마감일** 지정과 기한 지남·오늘 마감·D-n 표시, 마감일순 정렬
-- 확장 기능: **Google 로그인** — 사람마다 자기 사이트·점검 항목만 보고 관리 (배포 사이트, Supabase 모드)
+- 확장 기능: **Google 로그인** — 사람마다 자기 사이트·점검 항목만 보고 관리 (Supabase 모드)
 - 저장소: 로컬 SQLite 파일 (`db/siteops.db`, 로그인 없음) 또는 Supabase
 
 자세한 기획은 [PRD.md](PRD.md)에 있습니다.
@@ -37,6 +38,8 @@ Node 내장 `node:test`로 [`test/api.test.js`](test/api.test.js)를 실행합�
 추가·조회·수정·삭제, 필터·정렬, 입력 검증(제목·메모 길이와 타입, `is_done`은 true/false만, 날짜 형식), 사이트 추가·중복을 확인합니다.
 
 ## Supabase + Google 로그인으로 전환하기 (선택)
+
+지금은 아래 [로컬 Docker로 실행하기](#로컬-docker로-실행하기-서버-비용-없음)를 씁니다. 이 절은 클라우드 Supabase에 다시 올릴 때를 위한 기록입니다.
 
 기본 저장소는 SQLite(로그인 없음)입니다. `.env` 설정만 바꾸면 같은 화면·API가 Supabase(Postgres)에 저장되고, Google 로그인 후 사람마다 자기 데이터만 보게 됩니다.
 
