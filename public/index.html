@@ -55,7 +55,7 @@
         </label>
         <label class="field wide">
           <span>메모</span>
-          <input name="memo" placeholder="선택 사항">
+          <input name="memo" maxlength="1000" placeholder="선택 사항">
         </label>
         <button type="submit" class="btn primary">점검 항목 추가</button>
       </form>
@@ -114,7 +114,7 @@
       </label>
       <label class="field wide">
         <span>메모</span>
-        <textarea name="memo" rows="3"></textarea>
+        <textarea name="memo" rows="3" maxlength="1000"></textarea>
       </label>
       <p id="edit-error" class="error wide" role="alert"></p>
       <div class="dialog-actions wide">

@@ -37,6 +37,7 @@ const store = await createStore();
 // ---------- 입력 검증 ----------
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const STATUSES = ['all', 'open', 'done', 'overdue'];
+const MEMO_MAX = 1000;
 
 function toOptionalId(value, label) {
   if (value === null || value === undefined || value === '') return null;
@@ -56,13 +57,17 @@ function parseTodoInput(body = {}, { partial = false } = {}) {
   const has = (key) => Object.hasOwn(body, key);
   const out = {};
 
+  // 타입부터 확인한다 (객체가 '[object Object]'로, 문자열 "false"가 참으로 저장되는 것 방지)
   if (!partial || has('title')) {
-    const title = String(body.title ?? '').trim();
+    if (typeof body.title !== 'string') throw new HttpError(400, '제목은 1~100자로 입력해 주세요.');
+    const title = body.title.trim();
     if (title.length < 1 || title.length > 100) throw new HttpError(400, '제목은 1~100자로 입력해 주세요.');
     out.title = title;
   }
   if (has('memo')) {
-    const memo = String(body.memo ?? '').trim();
+    if (body.memo !== null && typeof body.memo !== 'string') throw new HttpError(400, '메모는 글자로 입력해 주세요.');
+    const memo = (body.memo ?? '').trim();
+    if (memo.length > MEMO_MAX) throw new HttpError(400, `메모는 ${MEMO_MAX}자 이하로 입력해 주세요.`);
     out.memo = memo || null;
   }
   if (has('site_id')) out.site_id = toOptionalId(body.site_id, '사이트');
@@ -72,7 +77,10 @@ function parseTodoInput(body = {}, { partial = false } = {}) {
     if (due !== null && !DATE_RE.test(due)) throw new HttpError(400, '마감일은 YYYY-MM-DD 형식이어야 합니다.');
     out.due_date = due;
   }
-  if (has('is_done')) out.is_done = body.is_done ? 1 : 0;
+  if (has('is_done')) {
+    if (typeof body.is_done !== 'boolean') throw new HttpError(400, 'is_done은 true 또는 false여야 합니다.');
+    out.is_done = body.is_done ? 1 : 0;
+  }
 
   return out;
 }
@@ -172,8 +180,8 @@ app.use((err, req, res, next) => {
 });
 
 // ---------- 시작 ----------
-// Vercel은 export한 app을 직접 실행하므로 listen하지 않는다
-if (!ON_VERCEL) {
+// Vercel은 export한 app을 직접 실행하므로 listen하지 않는다 (테스트도 NO_LISTEN=1로 직접 띄움)
+if (!ON_VERCEL && !process.env.NO_LISTEN) {
   try {
     await store.check?.();
   } catch (err) {

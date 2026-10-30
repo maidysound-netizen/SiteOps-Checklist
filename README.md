@@ -27,6 +27,15 @@ npm start
 - 처음 상태로 되돌리려면 서버를 끄고 `npm run db:reset` 후 다시 `npm start` 합니다.
 - 포트를 바꾸려면 `PORT=4000 npm start`.
 
+## 테스트
+
+```bash
+npm test
+```
+
+Node 내장 `node:test`로 [`test/api.test.js`](test/api.test.js)를 실행합니다. 메모리 SQLite DB로 서버를 띄워 실제 HTTP 요청을 보내므로 설치할 것도, 지워질 데이터도 없습니다.
+추가·조회·수정·삭제, 필터·정렬, 입력 검증(제목·메모 길이와 타입, `is_done`은 true/false만, 날짜 형식), 사이트 추가·중복을 확인합니다.
+
 ## Supabase + Google 로그인으로 전환하기 (선택)
 
 기본 저장소는 SQLite(로그인 없음)입니다. `.env` 설정만 바꾸면 같은 화면·API가 Supabase(Postgres)에 저장되고, Google 로그인 후 사람마다 자기 데이터만 보게 됩니다.

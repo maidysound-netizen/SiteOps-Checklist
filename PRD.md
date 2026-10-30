@@ -9,6 +9,7 @@
 | v1.2 | 2026-10-29 | Vercel 배포 (https://siteops-checklist.vercel.app) |
 | v2.0 | 2026-10-29 | Google 로그인(Supabase Auth) + 사용자별 데이터(RLS 정책), 사이트 추가 |
 | v2.1 | 2026-10-30 | 서버 비용 문제로 클라우드 Supabase 일시정지 → 로컬 Docker(Supabase CLI)에서 실행 |
+| v2.2 | 2026-10-30 | 파트너 코드 리뷰([Review.md](Review.md)) 반영: 입력 타입 검증, 메모 길이 제한, Supabase 요약을 DB에서 개수만 세기, 자동 테스트(`npm test`) |
 
 ## 1. 개요
 
@@ -48,7 +49,7 @@
 
 | ID | 기능 | 상세 | 완료 기준 |
 | --- | --- | --- | --- |
-| F-01 | 항목 추가 | 제목(필수), 메모, 사이트, 카테고리, 마감일 입력 후 등록 | 등록 즉시 목록에 표시되고 DB에 저장됨 |
+| F-01 | 항목 추가 | 제목(필수, 1~100자), 메모(1000자 이하), 사이트, 카테고리, 마감일 입력 후 등록. 타입이 맞지 않으면 400 (`is_done`은 true/false만) | 등록 즉시 목록에 표시되고 DB에 저장됨 |
 | F-02 | 목록 조회 | 미완료 항목 먼저, 그 안에서 마감일 빠른 순(마감일 없는 항목은 뒤), 같으면 최근 등록 순 | 앱을 다시 열어도 같은 목록이 보임 |
 | F-03 | 항목 수정 | 수정 창(dialog)에서 모든 입력값 수정, 기존 값 미리 채움 | 수정 후 `updated_at` 갱신 |
 | F-04 | 완료 토글 | 체크박스로 완료 ↔ 미완료 | 완료 시 `completed_at` 기록, 해제 시 비움 |
@@ -223,6 +224,10 @@ Supabase 모드에서는 `/api/config`를 뺀 모든 API에 `Authorization: Bear
 | v2.1 로컬 Docker | 클라우드 데이터 백업 → 로컬 Supabase에 `setup.sql`·백업 복원(사이트 2개·항목 5개), 로컬에서 Google 로그인, `claim.sql`로 내 계정에 이전 후 화면에 5개 표시 | 통과 |
 | v2.1 로컬 문제 | `supabase/.env`의 Google Secret이 비어 로그인 불가 → Secret 다시 저장 후 `db:stop`/`db:start`로 해결 | 해결 |
 | v2.1 배포 영향 | Mac 전용 CLI 패키지를 optionalDependencies로 옮김 → Linux 설치 시뮬레이션에서 건너뜀 확인 | 통과 |
+| v2.2 리뷰 결함 | 리뷰어가 찾은 문제: `is_done: "false"`(문자열)가 완료로 저장, 객체 제목이 `[object Object]`로 저장 → 타입 검사 추가 | 해결 |
+| v2.2 자동 테스트 | `npm test` 18건 통과. 고치기 전 코드로 돌리면 3건 실패(제목 타입, 메모 길이·타입, `is_done` 타입) → 테스트가 결함을 잡는 것 확인 | 통과 |
+| v2.2 마감일 비우기 | 수정 창이 보내는 빈 값('')으로 마감일·사이트·카테고리·메모를 비우면 null로 저장 (테스트 포함) | 통과 |
+| v2.2 클라우드 로그인 복구 | Google Cloud에서 예전 Client Secret 삭제 후 배포 사이트 로그인 실패(`Unable to exchange external code`) → Supabase Google 설정에 현재 Secret 저장 후 로그인 확인 | 해결 |
 
 ## 12. 완료 기준 (과제 제출 체크리스트)
 
@@ -234,3 +239,4 @@ Supabase 모드에서는 `/api/config`를 뺀 모든 API에 `Authorization: Bear
 - [x] Supabase 새 프로젝트에 연결해 같은 기능이 동작한다
 - [x] Vercel에 배포해 인터넷에서 접속할 수 있다
 - [x] Google 로그인 후 사람마다 자기 데이터만 보인다 (v2)
+- [x] `npm test` 자동 테스트가 모두 통과한다 (v2.2)
