@@ -1,4 +1,4 @@
-# AIFFEL Campus Agent Code Review Template
+# AIFFEL Campus Agent Code Review Template_1
 
 - 개발자: maidysound-netizen (커밋 작성자 기준)
 - 리뷰어: crystalmoon74
