@@ -8,6 +8,7 @@
 | v1.1 | 2026-10-29 | Supabase(Postgres) 저장소 선택 기능 추가, RLS 적용 |
 | v1.2 | 2026-10-29 | Vercel 배포 (https://siteops-checklist.vercel.app) |
 | v2.0 | 2026-10-29 | Google 로그인(Supabase Auth) + 사용자별 데이터(RLS 정책), 사이트 추가 |
+| v2.1 | 2026-10-30 | 서버 비용 문제로 클라우드 Supabase 일시정지 → 로컬 Docker(Supabase CLI)에서 실행 |
 
 ## 1. 개요
 
@@ -219,6 +220,9 @@ Supabase 모드에서는 `/api/config`를 뺀 모든 API에 `Authorization: Bear
 | v2 화면 | 로그인 전 로그인 화면만 표시 | 통과 |
 | v2 실제 배포 | 배포 사이트에서 Google 로그인(첫 로그인 = 가입), `claim.sql`로 기존 사이트 2개·항목 5개를 내 계정으로 이전, 비로그인 API 401 | 통과 |
 | v2 배포 문제 | 환경 변수 `SUPABASE_PUBLISHABLE_KEY` 누락으로 서버 시작 실패(500) → 변수 추가 후 재배포로 해결 | 해결 |
+| v2.1 로컬 Docker | 클라우드 데이터 백업 → 로컬 Supabase에 `setup.sql`·백업 복원(사이트 2개·항목 5개), 로컬에서 Google 로그인, `claim.sql`로 내 계정에 이전 후 화면에 5개 표시 | 통과 |
+| v2.1 로컬 문제 | `supabase/.env`의 Google Secret이 비어 로그인 불가 → Secret 다시 저장 후 `db:stop`/`db:start`로 해결 | 해결 |
+| v2.1 배포 영향 | Mac 전용 CLI 패키지를 optionalDependencies로 옮김 → Linux 설치 시뮬레이션에서 건너뜀 확인 | 통과 |
 
 ## 12. 완료 기준 (과제 제출 체크리스트)
 

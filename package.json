@@ -8,7 +8,9 @@
   "scripts": {
     "start": "node --env-file-if-exists=.env server.js",
     "dev": "node --env-file-if-exists=.env --watch server.js",
-    "db:reset": "node -e \"require('fs').rmSync('db/siteops.db',{force:true})\""
+    "db:reset": "node -e \"require('fs').rmSync('db/siteops.db',{force:true})\"",
+    "db:start": "supabase start",
+    "db:stop": "supabase stop"
   },
   "engines": {
     "node": ">=22.13"
@@ -16,5 +18,11 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",
     "express": "^5.3.0"
+  },
+  "devDependencies": {
+    "supabase": "^2.122.0"
+  },
+  "optionalDependencies": {
+    "@supabase/cli-darwin-arm64": "^2.122.0"
   }
 }

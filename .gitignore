@@ -10,3 +10,4 @@ db/*.db-*
 
 # 비밀 키
 .env
+backup/

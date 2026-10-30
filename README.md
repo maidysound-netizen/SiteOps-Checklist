@@ -52,8 +52,41 @@ npm start
 - 앱은 **secret 키를 쓰지 않습니다.** publishable 키는 브라우저에 내려가도 되는 공개용 키이고, 실제 권한은 로그인 토큰 + RLS 정책(`user_id = auth.uid()`)이 정합니다. 서버 코드에 실수가 있어도 DB가 남의 데이터를 막습니다.
 - 로그인하지 않은 요청은 서버에서 401, DB에서도 권한 없음으로 막힙니다.
 - `permission denied for table ...` 오류가 나면 `setup.sql`의 `grant ... to authenticated` 부분이 실행됐는지 확인하세요.
-- Google Client Secret은 Supabase 대시보드에만 저장하고 코드·`.env`에는 넣지 않습니다.
+- Google Client Secret은 클라우드에서는 Supabase 대시보드에만, 로컬 Docker에서는 git에 올라가지 않는 `supabase/.env`에만 둡니다. 코드·루트 `.env`에는 넣지 않습니다.
 - 다시 SQLite로 돌아가려면 `.env`에서 `DB_DRIVER=sqlite`로 바꿉니다.
+
+## 로컬 Docker로 실행하기 (서버 비용 없음)
+
+클라우드 Supabase 대신 내 컴퓨터의 Docker에서 Supabase(Postgres + 로그인)를 띄웁니다. 설정은 [`supabase/config.toml`](supabase/config.toml)에 있고, 필요 없는 서비스(Realtime·Storage 등)는 꺼 두었습니다.
+
+준비 (처음 한 번)
+
+1. [Docker Desktop](https://www.docker.com/products/docker-desktop/)을 설치하고 켭니다.
+2. `npm install` (Supabase CLI가 함께 설치됩니다)
+3. Google Cloud Console → OAuth 클라이언트의 승인된 리디렉션 URI에 `http://localhost:54321/auth/v1/callback`을 추가합니다.
+4. `supabase/.env.example`을 `supabase/.env`로 복사하고 `SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET=`에 Google Client Secret을 넣습니다.
+5. `npm run db:start` → 처음 실행이면 [`supabase/setup.sql`](supabase/setup.sql)을 로컬 DB에 넣습니다.
+   ```
+   docker exec -i supabase_db_todo-assignment psql -U postgres < supabase/setup.sql
+   ```
+6. 루트 `.env`를 로컬 주소로 맞춥니다. publishable 키는 `npm run db:start` 출력에 나오는 로컬 전용 키입니다.
+   ```
+   DB_DRIVER=supabase
+   SUPABASE_URL=http://localhost:54321
+   SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+   ```
+
+매번 실행
+
+```
+npm run db:start   # Docker Desktop이 켜져 있어야 함
+npm start          # http://localhost:3000
+npm run db:stop    # 끝낼 때 (데이터는 유지)
+```
+
+- 로컬 관리 화면(Studio): http://localhost:54323
+- 다른 DB에서 옮겨 온 v1 데이터는 첫 로그인 후 `docker exec -i supabase_db_todo-assignment psql -U postgres < supabase/claim.sql`로 내 계정에 붙입니다.
+- Secret을 바꾼 뒤에는 `npm run db:stop && npm run db:start`로 다시 켜야 적용됩니다.
 
 ## 폴더 구조
 
