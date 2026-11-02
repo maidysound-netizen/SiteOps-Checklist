@@ -42,7 +42,8 @@ v3.0에서 지웠던 Supabase + Google 로그인을 되살리되, 짝의 앱처�
 | 데이터 권한 | RLS (`user_id = auth.uid()`) | 그대로 |
 
 - 클라우드: v3.0에서 일시정지한 SiteOps Supabase 프로젝트를 Restore 해서 쓴다.
-- 서버는 여전히 `127.0.0.1`에서만 열린다 (Vercel 배포 시에는 Vercel이 실행).
+- 배포: Vercel 프로젝트가 연결된 채로 남아 있어 v3.1 푸시로 자동 재배포됨 → https://siteops-checklist.vercel.app
+- 로컬 서버는 여전히 `127.0.0.1`에서만 열린다.
 - v3.0에서 지운 로컬 Docker 설정(`supabase/config.toml`)은 되살리지 않았다. Docker Desktop은 삭제함.
 
 아래 1~12절은 과제 기간(v1.0~v2.3)의 기획과 기록이다. 로그인 흐름·키 관리·API는 **v3.1 기준으로 고쳤다**.
@@ -54,7 +55,7 @@ v3.0에서 지웠던 Supabase + Google 로그인을 되살리되, 짝의 앱처�
 | 제품명 | SiteOps Checklist |
 | 한 줄 설명 | 여러 개인 사이트(GitHub, Vercel, Supabase, DNS, Blogger 등)의 운영 점검 항목을 등록하고 완료 여부를 추적하는 Todo 앱 |
 | 사용자 | Supabase 모드: Google 계정으로 로그인한 사람 (각자 자기 데이터만) / SQLite 모드: 본인 1명, 로그인 없음 |
-| 배포 주소 | 없음 (v2.3에서 종료. 과제 기간에는 https://siteops-checklist.vercel.app) |
+| 배포 주소 | https://siteops-checklist.vercel.app (Vercel, Supabase 저장소. v3.0에서 잠시 종료 → v3.1에서 다시 사용) |
 | 저장소 | 기본: 로컬 SQLite 파일 (`db/siteops.db`) / 선택: Supabase (`.env`에서 `DB_DRIVER=supabase`) |
 | 기술 스택 | Node.js 22.13+ · Express 5 · `node:sqlite`(내장) · `@supabase/supabase-js`(서버에서만) · HTML/CSS/JavaScript(프레임워크 없음) |
 | 범위 원칙 | 사람이 직접 점검 결과를 등록·기록한다. 외부 서비스 API 연동, 기존 운영 저장소·Supabase 프로젝트 수정은 **하지 않는다**. Supabase는 이 앱 전용 **새 프로젝트**만 사용한다 |
@@ -268,6 +269,7 @@ Supabase 모드에서는 모든 `/api/*`에 로그인 쿠키가 필요하다 (�
 | v2.2 자동 테스트 | `npm test` 18건 통과. 고치기 전 코드로 돌리면 3건 실패(제목 타입, 메모 길이·타입, `is_done` 타입) → 테스트가 결함을 잡는 것 확인 | 통과 |
 | v2.2 마감일 비우기 | 수정 창이 보내는 빈 값('')으로 마감일·사이트·카테고리·메모를 비우면 null로 저장 (테스트 포함) | 통과 |
 | v3.1 실제 로그인 | 클라우드 프로젝트 Restore 후 로컬 서버(`127.0.0.1:3000`)에서 Google 로그인 성공, 기존 항목 표시. 로그인 전 `/api/me` 401 | 통과 |
+| v3.1 배포 로그인 | 배포 사이트에서 Google 로그인 성공. 돌아오는 주소가 `https://…/auth/callback`, 쿠키가 `HttpOnly; Secure; SameSite=Lax`, 로그인 전 API 401 | 통과 |
 | v3.1 자동 테스트 | `npm test` 24건 통과: CSRF 헤더 없으면 403, `/api/me`, 화면 코드에 Supabase 주소·키 없음, `/auth/google`이 HttpOnly PKCE 쿠키 + 올바른 code_challenge로 리디렉션, callback 오류 처리, 토큰 없으면 401 | 통과 |
 | v3.0 간소화 | `npm test` 통과(`/api/config`는 이제 404), 서버가 `127.0.0.1`에서만 열림, 화면에 로그인 없이 바로 목록 표시 | 통과 |
 | v2.2 클라우드 로그인 복구 | Google Cloud에서 예전 Client Secret 삭제 후 배포 사이트 로그인 실패(`Unable to exchange external code`) → Supabase Google 설정에 현재 Secret 저장 후 로그인 확인 | 해결 |
