@@ -27,13 +27,28 @@ npm start
 - 포트를 바꾸려면 `PORT=4000 npm start`.
 - 서버는 `127.0.0.1`에서만 열려서 같은 와이파이의 다른 기기에서는 접속할 수 없습니다.
 
+## 명령줄(CLI) — AI가 쓰는 입구 (v3.2)
+
+웹 화면과 같은 로컬 SQLite(`db/siteops.db`)를 터미널에서 다룹니다. AI 도구(Claude Code 등)가 이 명령을 직접 실행해 할 일 데이터를 읽습니다.
+
+```bash
+node cli.js list               # 목록
+node cli.js add "우유 사기"     # 추가
+node cli.js done 5             # 완료
+node cli.js summary            # 오늘 완료 요약
+```
+
+- 사용법은 [`AGENTS.md`](AGENTS.md)(규칙 파일)에 있고, [`CLAUDE.md`](CLAUDE.md)가 `@AGENTS.md`로 불러옵니다.
+- 반복 작업 스킬: [`.claude/skills/todo-summary/SKILL.md`](.claude/skills/todo-summary/SKILL.md) — 오늘 완료한 항목을 커밋 메시지 형식으로 요약.
+- CLI는 클라우드(Supabase)에 접속하지 않습니다. 인증 정보도 쓰지 않습니다.
+
 ## 테스트
 
 ```bash
 npm test
 ```
 
-Node 내장 `node:test`로 [`test/api.test.js`](test/api.test.js), [`test/auth.test.js`](test/auth.test.js)를 실행합니다. 메모리 SQLite DB로 서버를 띄워 실제 HTTP 요청을 보내므로 설치할 것도, 지워질 데이터도 없습니다.
+Node 내장 `node:test`로 [`test/api.test.js`](test/api.test.js), [`test/auth.test.js`](test/auth.test.js), [`test/cli.test.js`](test/cli.test.js)를 실행합니다. 메모리 SQLite DB로 서버를 띄워 실제 HTTP 요청을 보내므로 설치할 것도, 지워질 데이터도 없습니다.
 추가·조회·수정·삭제, 필터·정렬, 입력 검증(제목·메모 길이와 타입, `is_done`은 true/false만, 날짜 형식), 사이트 추가·중복, CSRF 헤더 검사, 화면 코드에 키가 없는지, 서버 로그인(PKCE 쿠키·리디렉션·토큰 없으면 401)을 확인합니다.
 
 ## Supabase + Google 로그인으로 실행하기 (선택)
@@ -76,7 +91,10 @@ Node 내장 `node:test`로 [`test/api.test.js`](test/api.test.js), [`test/auth.t
 ```
 todo-assignment/
 ├── PRD.md            기획 문서 (과제 기간 기록 포함)
+├── AGENTS.md         AI용 규칙 파일 (CLI 사용법), CLAUDE.md가 불러옴
 ├── server.js         Express 서버 + REST API (입력 검증)
+├── cli.js            명령줄 진입점 (list · add · done · summary)
+├── .claude/skills/todo-summary/  오늘 완료 요약 스킬
 ├── .env.example      환경 변수 예시 (복사해서 .env로 사용)
 ├── lib/
 │   ├── store-sqlite.js    SQLite 저장소

@@ -13,6 +13,7 @@
 | v2.3 | 2026-10-30 | 과제 종료: 클라우드 Supabase 프로젝트 일시정지·Vercel 배포 종료, 로컬 전용(SQLite / 로컬 Docker Supabase)으로 운영. 파트너 계정은 클라우드에서 삭제 |
 | v3.0 | 2026-10-30 | **나 혼자 쓰는 앱으로 간소화.** Supabase·Google 로그인·Docker·Vercel 관련 코드와 설정을 모두 제거하고 SQLite만 남김 (아래 "0. v3.0 — 나 혼자 쓰기") |
 | v3.1 | 2026-11-02 | **짝(crystalmoon74/ToDos)의 방식으로 Supabase 로그인 부활.** 로그인을 서버가 처리(PKCE)하고 토큰은 HttpOnly 쿠키에만 보관, 브라우저에서 Supabase 키·`supabase-js` 제거, CSRF 헤더 검사, 클라우드 프로젝트 Restore (아래 "0-1. v3.1") |
+| v3.2 | 2026-11-02 | **'AI가 아는' 앱 실습:** 명령줄 진입점 `cli.js`(list·add·done·summary, 같은 SQLite 저장소 재사용), 규칙 파일 `AGENTS.md`(+`CLAUDE.md`에서 `@AGENTS.md`), 스킬 `.claude/skills/todo-summary`, CLI 테스트 3건 (아래 "0-2. v3.2") |
 
 ## 0. v3.0 — 나 혼자 쓰기
 
@@ -45,6 +46,19 @@ v3.0에서 지웠던 Supabase + Google 로그인을 되살리되, 짝의 앱처�
 - 배포: Vercel 프로젝트가 연결된 채로 남아 있어 v3.1 푸시로 자동 재배포됨 → https://siteops-checklist.vercel.app
 - 로컬 서버는 여전히 `127.0.0.1`에서만 열린다.
 - v3.0에서 지운 로컬 Docker 설정(`supabase/config.toml`)은 되살리지 않았다. Docker Desktop은 삭제함.
+
+## 0-2. v3.2 — AI가 아는 앱 (CLI + 규칙 파일 + 스킬)
+
+실습 과제: 범용 AI를 "내 앱을 아는 조수"로 만든다. 무거운 MCP 대신 앱에 CLI를 달고, 사용법을 규칙 파일에 적고, 반복 작업을 스킬로 저장한다. 실습 갈래는 **(a) 로컬** — 클라우드는 터미널 로그인(RLS용 Google 토큰)이 필요해 복잡하고, 실데이터 대신 로컬 테스트 데이터를 쓰기 위함.
+
+| 구성 | 파일 | 내용 |
+| --- | --- | --- |
+| CLI | `cli.js` | `list` / `add "<내용>"` / `done <번호>` / `summary`. 웹 앱의 `lib/store-sqlite.js`를 그대로 불러 쓰는 얇은 진입점 (앱 코드 수정 없음). 오류는 stderr + 종료 코드 1 |
+| 완료 시각 | `db/schema.sql` | 이미 있음: 완료 토글 시 트리거가 `completed_at`을 로컬 시각으로 기록 → `summary`가 "오늘 완료"를 셈 |
+| 규칙 파일 | `AGENTS.md`, `CLAUDE.md` | 개요·명령·규칙·하지 말 것. `CLAUDE.md`는 `@AGENTS.md` 한 줄 |
+| 스킬 | `.claude/skills/todo-summary/SKILL.md` | `node cli.js summary` 실행 → 커밋 메시지 형식으로 정리 (실제 커밋은 안 함) |
+| 권한 연습 | `연습용-삭제해도-됨.txt` | 삭제 요청 → 승인창에서 거부 연습용 더미 파일 (`.gitignore`에 넣어 Git에 안 올림) |
+| 되돌릴 지점 | git | 코드 수정 전 커밋 `b60fd3a`. 단, Git은 코드만 되돌린다 — `db/siteops.db`는 Git에 없으므로 따로 보호 |
 
 아래 1~12절은 과제 기간(v1.0~v2.3)의 기획과 기록이다. 로그인 흐름·키 관리·API는 **v3.1 기준으로 고쳤다**.
 
@@ -174,6 +188,7 @@ index.html · app.js · style.css ──▶  Express REST API            ──�
 | `lib/store-sqlite.js` | SQLite 읽기·쓰기 (Node 내장 `node:sqlite`) |
 | `lib/store-supabase.js` | Supabase 읽기·쓰기 (요청한 사용자 권한으로), Postgres 오류 코드를 HTTP 오류로 변환 |
 | `lib/auth.js` | 서버 Google 로그인 (v3.1): PKCE, 토큰 교환·갱신, HttpOnly 쿠키, 로그아웃 |
+| `cli.js` | 명령줄 진입점 (v3.2): list · add · done · summary, SQLite 저장소 재사용 |
 | `lib/errors.js` | 공통 HTTP 오류 |
 | `db/schema.sql`, `db/seed.sql` | SQLite 스키마와 예시 데이터 |
 | `supabase/setup.sql` | 같은 구조의 Postgres 버전 + `user_id` + RLS 정책 + 카테고리 (SQL Editor에서 실행, 여러 번 실행해도 안전, v1 DB도 그대로 업그레이드) |
@@ -268,6 +283,7 @@ Supabase 모드에서는 모든 `/api/*`에 로그인 쿠키가 필요하다 (�
 | v2.2 리뷰 결함 | 리뷰어가 찾은 문제: `is_done: "false"`(문자열)가 완료로 저장, 객체 제목이 `[object Object]`로 저장 → 타입 검사 추가 | 해결 |
 | v2.2 자동 테스트 | `npm test` 18건 통과. 고치기 전 코드로 돌리면 3건 실패(제목 타입, 메모 길이·타입, `is_done` 타입) → 테스트가 결함을 잡는 것 확인 | 통과 |
 | v2.2 마감일 비우기 | 수정 창이 보내는 빈 값('')으로 마감일·사이트·카테고리·메모를 비우면 null로 저장 (테스트 포함) | 통과 |
+| v3.2 CLI | `npm test` 27건 통과 (CLI 3건 추가: 목록·추가·완료·오늘 요약, 잘못된 입력 종료 코드 1). 임시 DB로 실행해 `db/siteops.db`는 건드리지 않음 | 통과 |
 | v3.1 실제 로그인 | 클라우드 프로젝트 Restore 후 로컬 서버(`127.0.0.1:3000`)에서 Google 로그인 성공, 기존 항목 표시. 로그인 전 `/api/me` 401 | 통과 |
 | v3.1 배포 로그인 | 배포 사이트에서 Google 로그인 성공. 돌아오는 주소가 `https://…/auth/callback`, 쿠키가 `HttpOnly; Secure; SameSite=Lax`, 로그인 전 API 401 | 통과 |
 | v3.1 자동 테스트 | `npm test` 24건 통과: CSRF 헤더 없으면 403, `/api/me`, 화면 코드에 Supabase 주소·키 없음, `/auth/google`이 HttpOnly PKCE 쿠키 + 올바른 code_challenge로 리디렉션, callback 오류 처리, 토큰 없으면 401 | 통과 |
