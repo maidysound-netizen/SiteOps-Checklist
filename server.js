@@ -1,17 +1,39 @@
-// SiteOps Checklist — Express 서버 (나 혼자 쓰는 로컬 앱, SQLite 저장)
+// SiteOps Checklist — Express 서버
+// 저장소: 기본 SQLite(로그인 없음), .env에 DB_DRIVER=supabase 이면 Supabase + Google 로그인
+// 로그인은 서버가 처리한다 (lib/auth.js). 브라우저에는 Supabase 주소·키·토큰이 없다.
 import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { HttpError, notFound } from './lib/errors.js';
-import { createSqliteStore } from './lib/store-sqlite.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT ?? 3000);
+const ON_VERCEL = Boolean(process.env.VERCEL);
 
-const store = createSqliteStore({
-  dbPath: process.env.DB_PATH ?? path.join(ROOT, 'db', 'siteops.db'),
-  sqlDir: path.join(ROOT, 'db'),
-});
+// ---------- 저장소 선택 ----------
+// 쓰는 저장소만 불러온다 (Vercel에는 SQLite 파일을 쓸 수 없음)
+async function createStore() {
+  const driver = process.env.DB_DRIVER ?? 'sqlite';
+  if (driver === 'sqlite') {
+    if (ON_VERCEL) throw new Error('Vercel에서는 SQLite를 쓸 수 없습니다. 환경 변수에 DB_DRIVER=supabase를 설정해 주세요.');
+    const { createSqliteStore } = await import('./lib/store-sqlite.js');
+    return createSqliteStore({
+      dbPath: process.env.DB_PATH ?? path.join(ROOT, 'db', 'siteops.db'),
+      sqlDir: path.join(ROOT, 'db'),
+    });
+  }
+  if (driver === 'supabase') {
+    const { SUPABASE_URL: url, SUPABASE_PUBLISHABLE_KEY: key } = process.env;
+    if (!url || !key) {
+      throw new Error('DB_DRIVER=supabase 이면 SUPABASE_URL과 SUPABASE_PUBLISHABLE_KEY가 필요합니다. (.env.example 참고)');
+    }
+    const { createSupabaseStore } = await import('./lib/store-supabase.js');
+    return createSupabaseStore({ url, key });
+  }
+  throw new Error(`알 수 없는 DB_DRIVER: ${driver} (sqlite 또는 supabase)`);
+}
+
+const store = await createStore();
 
 // ---------- 입력 검증 ----------
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -74,14 +96,46 @@ function parseSiteInput(body = {}) {
 
 // ---------- API ----------
 const app = express();
+// Vercel 프록시 뒤에서만 X-Forwarded-* 헤더를 믿는다 (https 주소·Secure 쿠키 판단)
+if (ON_VERCEL) app.set('trust proxy', true);
 app.use(express.json());
 app.use(express.static(path.join(ROOT, 'public')));
+
+// 쓰기 요청은 우리 화면(app.js)이 붙이는 헤더가 있어야 한다.
+// 로그인이 쿠키 방식이라, 다른 사이트가 몰래 보내는 요청(CSRF)을 막기 위함 (다른 사이트는 이 헤더를 붙이면 CORS에 막힘)
+app.use(['/api', '/auth'], (req, res, next) => {
+  if (req.method !== 'GET' && req.get('x-requested-with') !== 'fetch') throw new HttpError(403, '잘못된 요청입니다.');
+  next();
+});
+
+// Google 로그인 (Supabase 모드에서만)
+if (store.auth) {
+  app.get('/auth/google', store.auth.start);
+  app.get('/auth/callback', store.auth.callback);
+  app.post('/auth/logout', store.auth.logout);
+}
+
+// 로그인 모드: 쿠키의 토큰으로 그 사용자의 저장소를 만든다 → DB RLS가 자기 데이터만 허용
+app.use('/api', async (req, res, next) => {
+  if (!store.auth) {
+    req.store = store;
+    return next();
+  }
+  req.token = await store.auth.token(req, res);
+  req.store = store.forUser(req.token);
+  next();
+});
+
+// 화면이 로그인 상태를 확인하는 값 (SQLite 모드는 로그인 없음)
+app.get('/api/me', (req, res) => {
+  res.json(store.auth ? { auth: true, email: store.auth.email(req.token) } : { auth: false });
+});
 
 app.get('/api/todos', async (req, res) => {
   const status = req.query.status ?? 'all';
   if (!STATUSES.includes(status)) throw new HttpError(400, '상태 필터가 올바르지 않습니다.');
   res.json(
-    await store.listTodos({
+    await req.store.listTodos({
       site: toOptionalId(req.query.site, '사이트'),
       category: toOptionalId(req.query.category, '카테고리'),
       status,
@@ -90,43 +144,43 @@ app.get('/api/todos', async (req, res) => {
 });
 
 app.get('/api/todos/:id', async (req, res) => {
-  const todo = await store.getTodo(parseId(req.params.id));
+  const todo = await req.store.getTodo(parseId(req.params.id));
   if (!todo) throw notFound();
   res.json(todo);
 });
 
 app.post('/api/todos', async (req, res) => {
-  res.status(201).json(await store.createTodo(parseTodoInput(req.body)));
+  res.status(201).json(await req.store.createTodo(parseTodoInput(req.body)));
 });
 
 app.patch('/api/todos/:id', async (req, res) => {
   const id = parseId(req.params.id);
   const input = parseTodoInput(req.body, { partial: true });
   if (Object.keys(input).length === 0) throw new HttpError(400, '수정할 내용이 없습니다.');
-  const todo = await store.updateTodo(id, input);
+  const todo = await req.store.updateTodo(id, input);
   if (!todo) throw notFound();
   res.json(todo);
 });
 
 app.delete('/api/todos/:id', async (req, res) => {
-  if (!(await store.deleteTodo(parseId(req.params.id)))) throw notFound();
+  if (!(await req.store.deleteTodo(parseId(req.params.id)))) throw notFound();
   res.status(204).end();
 });
 
 app.get('/api/categories', async (req, res) => {
-  res.json(await store.listCategories());
+  res.json(await req.store.listCategories());
 });
 
 app.get('/api/sites', async (req, res) => {
-  res.json(await store.listSites());
+  res.json(await req.store.listSites());
 });
 
 app.post('/api/sites', async (req, res) => {
-  res.status(201).json(await store.createSite(parseSiteInput(req.body)));
+  res.status(201).json(await req.store.createSite(parseSiteInput(req.body)));
 });
 
 app.get('/api/summary', async (req, res) => {
-  res.json(await store.summary());
+  res.json(await req.store.summary());
 });
 
 app.use('/api', (req, res) => {
@@ -142,8 +196,16 @@ app.use((err, req, res, next) => {
 });
 
 // ---------- 시작 ----------
-// 테스트는 NO_LISTEN=1로 불러와 직접 띄운다
-if (!process.env.NO_LISTEN) {
+// Vercel은 export한 app을 직접 실행하므로 listen하지 않는다 (테스트도 NO_LISTEN=1로 직접 띄움)
+if (!ON_VERCEL && !process.env.NO_LISTEN) {
+  try {
+    await store.check?.();
+  } catch (err) {
+    console.error(`DB 연결 확인 실패: ${err.message}`);
+    process.exit(1);
+  }
+
+  // 내 컴퓨터에서만 접속 가능 (같은 와이파이의 다른 기기에서는 접속 불가)
   app.listen(PORT, '127.0.0.1', () => {
     console.log(`SiteOps Checklist → http://localhost:${PORT}  (DB: ${store.label})`);
   });

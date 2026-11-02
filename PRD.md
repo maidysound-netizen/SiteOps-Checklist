@@ -12,6 +12,7 @@
 | v2.2 | 2026-10-30 | 파트너 코드 리뷰([Review.md](Review.md)) 반영: 입력 타입 검증, 메모 길이 제한, Supabase 요약을 DB에서 개수만 세기, 자동 테스트(`npm test`) |
 | v2.3 | 2026-10-30 | 과제 종료: 클라우드 Supabase 프로젝트 일시정지·Vercel 배포 종료, 로컬 전용(SQLite / 로컬 Docker Supabase)으로 운영. 파트너 계정은 클라우드에서 삭제 |
 | v3.0 | 2026-10-30 | **나 혼자 쓰는 앱으로 간소화.** Supabase·Google 로그인·Docker·Vercel 관련 코드와 설정을 모두 제거하고 SQLite만 남김 (아래 "0. v3.0 — 나 혼자 쓰기") |
+| v3.1 | 2026-11-02 | **짝(crystalmoon74/ToDos)의 방식으로 Supabase 로그인 부활.** 로그인을 서버가 처리(PKCE)하고 토큰은 HttpOnly 쿠키에만 보관, 브라우저에서 Supabase 키·`supabase-js` 제거, CSRF 헤더 검사, 클라우드 프로젝트 Restore (아래 "0-1. v3.1") |
 
 ## 0. v3.0 — 나 혼자 쓰기
 
@@ -26,7 +27,25 @@
 | 보안 | 서버는 `127.0.0.1`에서만 열린다 (같은 와이파이의 다른 기기에서도 접속 불가). 로그인이 없으니 외부에 열지 않는다 |
 | 되돌리기 | Supabase·로그인 버전이 다시 필요하면 git의 `v2.3` 커밋(`d4266a8`)에서 꺼내 쓴다 |
 
-아래 1~12절은 과제 기간(v1.0~v2.3)의 기획과 기록이다. Supabase·로그인·배포에 관한 내용은 **v3.0에서 제거됨**.
+## 0-1. v3.1 — 짝의 방식으로 로그인 다시 만들기
+
+v3.0에서 지웠던 Supabase + Google 로그인을 되살리되, 짝의 앱처럼 **"화면은 우리 서버만 호출하고, 키와 토큰은 서버에만"** 두는 구조로 바꿨다. 언어는 Node(Express) 그대로.
+
+| 항목 | v2.x (예전) | v3.1 (지금) |
+| --- | --- | --- |
+| 로그인 처리 | 브라우저가 `supabase-js`로 Supabase Auth 직접 호출 | 서버가 처리: `/auth/google` → Supabase(Google) → `/auth/callback`에서 code를 토큰으로 교환 (PKCE) |
+| 브라우저가 아는 것 | Supabase 주소 + publishable 키 (`/api/config`) | 아무것도 없음. 우리 서버의 `/api`, `/auth`만 호출 |
+| 토큰 보관 | 브라우저 localStorage (JS가 읽을 수 있음) | **HttpOnly 쿠키** (JS가 못 읽음 → XSS로 토큰 탈취 불가), `SameSite=Lax` |
+| API 인증 | `Authorization: Bearer` 헤더 | 쿠키 자동 전송, 만료 1분 전이면 서버가 refresh 토큰으로 갱신 |
+| CSRF | 해당 없음 (헤더 인증) | 쓰기 요청은 `X-Requested-With: fetch` 헤더 필수, 없으면 403 |
+| 로그인 상태 확인 | `supabase.auth.getSession()` | `GET /api/me` |
+| 데이터 권한 | RLS (`user_id = auth.uid()`) | 그대로 |
+
+- 클라우드: v3.0에서 일시정지한 SiteOps Supabase 프로젝트를 Restore 해서 쓴다.
+- 서버는 여전히 `127.0.0.1`에서만 열린다 (Vercel 배포 시에는 Vercel이 실행).
+- v3.0에서 지운 로컬 Docker 설정(`supabase/config.toml`)은 되살리지 않았다. Docker Desktop은 삭제함.
+
+아래 1~12절은 과제 기간(v1.0~v2.3)의 기획과 기록이다. 로그인 흐름·키 관리·API는 **v3.1 기준으로 고쳤다**.
 
 ## 1. 개요
 
@@ -34,10 +53,10 @@
 | --- | --- |
 | 제품명 | SiteOps Checklist |
 | 한 줄 설명 | 여러 개인 사이트(GitHub, Vercel, Supabase, DNS, Blogger 등)의 운영 점검 항목을 등록하고 완료 여부를 추적하는 Todo 앱 |
-| 사용자 | 본인 1명, 로그인 없음 (v3.0) |
+| 사용자 | Supabase 모드: Google 계정으로 로그인한 사람 (각자 자기 데이터만) / SQLite 모드: 본인 1명, 로그인 없음 |
 | 배포 주소 | 없음 (v2.3에서 종료. 과제 기간에는 https://siteops-checklist.vercel.app) |
-| 저장소 | 로컬 SQLite 파일 (`db/siteops.db`). v1.1~v2.3에는 Supabase도 선택 가능했음 |
-| 기술 스택 | Node.js 22.13+ · Express 5 · `node:sqlite`(내장) · HTML/CSS/JavaScript(프레임워크 없음) |
+| 저장소 | 기본: 로컬 SQLite 파일 (`db/siteops.db`) / 선택: Supabase (`.env`에서 `DB_DRIVER=supabase`) |
+| 기술 스택 | Node.js 22.13+ · Express 5 · `node:sqlite`(내장) · `@supabase/supabase-js`(서버에서만) · HTML/CSS/JavaScript(프레임워크 없음) |
 | 범위 원칙 | 사람이 직접 점검 결과를 등록·기록한다. 외부 서비스 API 연동, 기존 운영 저장소·Supabase 프로젝트 수정은 **하지 않는다**. Supabase는 이 앱 전용 **새 프로젝트**만 사용한다 |
 
 ## 2. 문제 정의
@@ -100,7 +119,7 @@
 | F-30 | 요약 카드 | 전체 / 미완료 / 완료 / 기한 지남 개수 |
 | F-31 | 사이트·상태 필터 | 사이트 선택, 상태(모든 상태 / 미완료 / 완료 / 기한 지남) 선택, 카테고리 탭과 함께 사용 가능 |
 
-### 4.5 저장소 선택 (v1.1 — v3.0에서 SQLite만 남김)
+### 4.5 저장소 선택 (v1.1, v3.0에서 제거 → v3.1에서 복구)
 
 | ID | 기능 | 상세 |
 | --- | --- | --- |
@@ -110,7 +129,7 @@
 
 두 모드는 같은 API 응답 형식을 돌려주므로 화면 코드(`public/`)는 저장소와 무관하다.
 
-### 4.6 로그인과 사용자별 데이터 (v2.0 — v3.0에서 제거, F-53 사이트 추가만 남음)
+### 4.6 로그인과 사용자별 데이터 (v2.0, v3.1에서 서버 로그인으로 변경)
 
 | ID | 기능 | 상세 |
 | --- | --- | --- |
@@ -120,7 +139,7 @@
 | F-53 | 사이트 추가 | "+ 사이트 추가"에서 이름(1~50자, 내 사이트 중 중복 불가)과 주소(선택, http/https) 입력 |
 | F-54 | 기존 데이터 이전 | v1 데이터(주인 없음)를 처음 가입한 계정으로 옮기는 `supabase/claim.sql` |
 
-로그인 흐름: 브라우저가 Supabase Auth로 Google 로그인(PKCE) → 받은 access token을 API 요청의 `Authorization: Bearer` 헤더로 보냄 → 서버는 그 토큰으로 Supabase에 접속 → DB의 RLS 정책이 `user_id = auth.uid()`인 행만 허용.
+로그인 흐름 (v3.1): 브라우저가 `/auth/google`로 이동 → 서버가 PKCE verifier를 HttpOnly 쿠키에 두고 Supabase(Google) 로그인 화면으로 보냄 → `/auth/callback`에서 서버가 code + verifier로 토큰을 받아 HttpOnly 쿠키에 저장 → 이후 API 요청은 쿠키로 인증, 서버가 그 토큰으로 Supabase에 접속 → DB의 RLS 정책이 `user_id = auth.uid()`인 행만 허용.
 
 ## 5. 비기능 요구사항
 
@@ -131,7 +150,8 @@
   - 사이트·카테고리: 존재하는 ID만 허용 (외래 키)
 - **SQL 인젝션 방지**: SQLite는 파라미터 바인딩(`?`), Supabase는 클라이언트 라이브러리의 쿼리 빌더만 사용한다. 수정 가능한 컬럼은 서버의 허용 목록으로 제한한다.
 - **XSS 방지**: 화면에 사용자 입력을 넣을 때 `textContent`만 사용한다 (`innerHTML` 미사용).
-- **키 관리 (v2)**: 앱은 secret 키를 쓰지 않고 공개용 publishable 키만 쓴다. 이 키는 브라우저에 내려가도 되는 키이며, 권한은 로그인 토큰과 RLS가 정한다. Google OAuth Client Secret은 Supabase 대시보드에만 저장한다.
+- **키 관리 (v3.1)**: 앱은 secret 키를 쓰지 않는다. publishable 키는 서버 `.env`에만 두고 브라우저에는 보내지 않는다. 권한은 로그인 토큰과 RLS가 정한다. Google OAuth Client Secret은 Supabase 대시보드에만 저장한다.
+- **토큰·CSRF (v3.1)**: 로그인 토큰은 HttpOnly·SameSite=Lax 쿠키에만 둔다. 쓰기 요청은 `X-Requested-With: fetch` 헤더가 없으면 403.
 - **사용자별 접근 제한 (RLS)**: `sites`·`todos`에 `user_id`(기본값 `auth.uid()`) 컬럼을 두고 정책 `user_id = auth.uid()`로 자기 행만 읽고 쓰게 한다. 항목에 붙이는 사이트도 내 사이트여야 한다. 로그인하지 않은 공개 키(anon)는 권한이 없어 모두 차단된다. 뷰는 `security_invoker`로 만들어 RLS를 우회하지 못하게 한다.
 - **테이블 권한 (GRANT)**: 최근 Supabase 프로젝트는 SQL로 만든 테이블에 권한을 자동으로 주지 않으므로, `setup.sql`에서 `authenticated`에 필요한 권한만 명시적으로 준다 (카테고리는 읽기만).
 - **오류 응답**: JSON `{ "error": "한국어 메시지" }` + 400 / 401(로그인 필요) / 403 / 404 / 409(사이트 이름 중복) / 500 상태 코드.
@@ -143,8 +163,8 @@
 브라우저 (public/)                    서버 (server.js)                      저장소 (lib/)
 index.html · app.js · style.css ──▶  Express REST API            ──▶  store-sqlite.js   ──▶ db/siteops.db
         fetch /api/...                 입력 검증 · 오류 처리              store-supabase.js ──▶ Supabase (Postgres)
-  (Supabase 모드) Google 로그인         DB_DRIVER로 저장소 선택            요청마다 사용자 토큰으로 접속 → RLS
-  → Authorization: Bearer 토큰          토큰 없으면 401
+  (Supabase 모드) /auth/google 이동     lib/auth.js: 서버 로그인(PKCE)     요청마다 사용자 토큰으로 접속 → RLS
+  로그인 쿠키(HttpOnly) 자동 전송        쿠키 없으면 401, 키는 서버에만
 ```
 
 | 파일 | 역할 |
@@ -152,6 +172,7 @@ index.html · app.js · style.css ──▶  Express REST API            ──�
 | `server.js` | API 경로, 입력 검증, 오류 처리, `.env`에 따라 저장소 선택 |
 | `lib/store-sqlite.js` | SQLite 읽기·쓰기 (Node 내장 `node:sqlite`) |
 | `lib/store-supabase.js` | Supabase 읽기·쓰기 (요청한 사용자 권한으로), Postgres 오류 코드를 HTTP 오류로 변환 |
+| `lib/auth.js` | 서버 Google 로그인 (v3.1): PKCE, 토큰 교환·갱신, HttpOnly 쿠키, 로그아웃 |
 | `lib/errors.js` | 공통 HTTP 오류 |
 | `db/schema.sql`, `db/seed.sql` | SQLite 스키마와 예시 데이터 |
 | `supabase/setup.sql` | 같은 구조의 Postgres 버전 + `user_id` + RLS 정책 + 카테고리 (SQL Editor에서 실행, 여러 번 실행해도 안전, v1 DB도 그대로 업그레이드) |
@@ -195,12 +216,14 @@ SQLite와 Postgres의 차이
 | PATCH | `/api/todos/:id` | 항목 수정(부분) · 완료 토글 (`{"is_done": true}`) |
 | DELETE | `/api/todos/:id` | 항목 삭제 → 204 |
 | GET | `/api/categories` | 카테고리 목록 |
-| ~~GET~~ | ~~`/api/config`~~ | ~~로그인 모드 여부~~ (v3.0에서 제거) |
+| GET | `/api/me` | 로그인 여부와 내 이메일 (v3.1, 예전 `/api/config` 대체) |
+| GET | `/auth/google` · `/auth/callback` | 서버 Google 로그인 시작 · 돌아와서 토큰을 쿠키에 저장 (v3.1) |
+| POST | `/auth/logout` | 로그아웃, 쿠키 삭제 (v3.1) |
 | GET | `/api/sites` | 사이트 목록 |
 | POST | `/api/sites` | 사이트 추가 (`name` 필수, `url` 선택) → 201, 이름 중복 409 |
 | GET | `/api/summary` | 전체 / 미완료 / 완료 / 기한 지남 개수 |
 
-Supabase 모드에서는 `/api/config`를 뺀 모든 API에 `Authorization: Bearer <access token>`이 필요하다 (없거나 만료되면 401).
+Supabase 모드에서는 모든 `/api/*`에 로그인 쿠키가 필요하다 (없거나 갱신에 실패하면 401). 쓰기 요청은 `X-Requested-With: fetch` 헤더도 필요하다 (없으면 403).
 
 ## 9. 범위 밖
 
@@ -244,6 +267,8 @@ Supabase 모드에서는 `/api/config`를 뺀 모든 API에 `Authorization: Bear
 | v2.2 리뷰 결함 | 리뷰어가 찾은 문제: `is_done: "false"`(문자열)가 완료로 저장, 객체 제목이 `[object Object]`로 저장 → 타입 검사 추가 | 해결 |
 | v2.2 자동 테스트 | `npm test` 18건 통과. 고치기 전 코드로 돌리면 3건 실패(제목 타입, 메모 길이·타입, `is_done` 타입) → 테스트가 결함을 잡는 것 확인 | 통과 |
 | v2.2 마감일 비우기 | 수정 창이 보내는 빈 값('')으로 마감일·사이트·카테고리·메모를 비우면 null로 저장 (테스트 포함) | 통과 |
+| v3.1 실제 로그인 | 클라우드 프로젝트 Restore 후 로컬 서버(`127.0.0.1:3000`)에서 Google 로그인 성공, 기존 항목 표시. 로그인 전 `/api/me` 401 | 통과 |
+| v3.1 자동 테스트 | `npm test` 24건 통과: CSRF 헤더 없으면 403, `/api/me`, 화면 코드에 Supabase 주소·키 없음, `/auth/google`이 HttpOnly PKCE 쿠키 + 올바른 code_challenge로 리디렉션, callback 오류 처리, 토큰 없으면 401 | 통과 |
 | v3.0 간소화 | `npm test` 통과(`/api/config`는 이제 404), 서버가 `127.0.0.1`에서만 열림, 화면에 로그인 없이 바로 목록 표시 | 통과 |
 | v2.2 클라우드 로그인 복구 | Google Cloud에서 예전 Client Secret 삭제 후 배포 사이트 로그인 실패(`Unable to exchange external code`) → Supabase Google 설정에 현재 Secret 저장 후 로그인 확인 | 해결 |
 

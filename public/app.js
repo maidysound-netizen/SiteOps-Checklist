@@ -8,16 +8,26 @@ const state = {
 
 const $ = (selector) => document.querySelector(selector);
 
+// 이 화면은 우리 서버(/api, /auth)만 호출한다. Supabase 주소·키·로그인 토큰은 브라우저에 없다.
+// 로그인 토큰은 서버가 HttpOnly 쿠키로 관리하고, fetch가 자동으로 함께 보낸다.
 async function api(path, options = {}) {
   const res = await fetch(path, {
-    headers: { 'Content-Type': 'application/json' },
+    // X-Requested-With: 서버가 다른 사이트의 몰래 요청(CSRF)과 구분하는 표시
+    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'fetch' },
     ...options,
     body: options.body ? JSON.stringify(options.body) : undefined,
   });
+  if (res.status === 401) showLogin();
   if (res.status === 204) return null;
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error ?? '요청에 실패했습니다.');
   return data;
+}
+
+function showLogin() {
+  $('#app-view').hidden = true;
+  $('#user-box').hidden = true;
+  $('#login-view').hidden = false;
 }
 
 function el(tag, props = {}, children = []) {
@@ -225,6 +235,15 @@ $('#site-form').addEventListener('submit', async (event) => {
   }
 });
 
+$('#login-google').addEventListener('click', () => {
+  location.href = '/auth/google';
+});
+
+$('#logout').addEventListener('click', async () => {
+  await api('/auth/logout', { method: 'POST' }).catch(() => {});
+  location.reload();
+});
+
 $('#edit-cancel').addEventListener('click', () => $('#edit-dialog').close());
 
 $('#filter-site').addEventListener('change', (event) => {
@@ -238,11 +257,34 @@ $('#filter-status').addEventListener('change', (event) => {
 });
 
 // ---------- 시작 ----------
+// 로그인 상태 확인. 로그인 안 했으면 /api/me가 401 → 로그인 화면 (SQLite 모드는 로그인 없음)
+async function initAuth() {
+  const loginError = new URLSearchParams(location.search).get('login_error');
+  if (loginError) history.replaceState(null, '', location.pathname);
+
+  let me;
+  try {
+    me = await api('/api/me');
+  } catch (err) {
+    if ($('#login-view').hidden) throw err;
+    $('#login-error').textContent = loginError ?? '';
+    return false;
+  }
+  if (!me.auth) return true;
+  $('#user-email').textContent = me.email ?? '';
+  $('#user-box').hidden = false;
+  return true;
+}
+
 (async () => {
+  if (!(await initAuth())) return;
+  $('#app-view').hidden = false;
   [state.sites, state.categories] = await Promise.all([api('/api/sites'), api('/api/categories')]);
   fillSelects();
   renderTabs();
   await refresh();
 })().catch((err) => {
+  if (!$('#login-view').hidden) return; // 로그인 만료(401) → 로그인 화면이 이미 떠 있음
+  $('#app-view').hidden = false;
   $('#todo-list').replaceChildren(el('li', { className: 'error', textContent: `불러오기 실패: ${err.message}` }));
 });

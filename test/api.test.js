@@ -4,6 +4,7 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 
 process.env.NO_LISTEN = '1';
+process.env.DB_DRIVER = 'sqlite';
 process.env.DB_PATH = ':memory:';
 const { default: app } = await import('../server.js');
 
@@ -15,7 +16,7 @@ after(() => server.close());
 async function call(method, path, body, { raw } = {}) {
   const res = await fetch(base + path, {
     method,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'fetch' },
     body: raw ?? (body === undefined ? undefined : JSON.stringify(body)),
   });
   const data = res.status === 204 ? null : await res.json();
@@ -149,7 +150,22 @@ test('사이트 추가 201, 같은 이름 409, http(s)가 아닌 주소 400', as
 });
 
 // ---------- 기타 ----------
-test('없는 API는 404 (v3.0에서 지운 /api/config 포함)', async () => {
+test('SQLite 모드는 로그인 없음, 없는 API는 404 (예전 /api/config 포함)', async () => {
+  assert.deepEqual((await call('GET', '/me')).data, { auth: false });
   assert.equal((await call('GET', '/config')).status, 404);
   assert.equal((await call('GET', '/nope')).status, 404);
+});
+
+test('쓰기 요청에 X-Requested-With 헤더가 없으면 403 (CSRF 방어)', async () => {
+  const res = await fetch(`${base}/todos`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title: '몰래 추가' }),
+  });
+  assert.equal(res.status, 403);
+});
+
+test('화면 코드에 Supabase 주소·키가 없다', async () => {
+  const js = await (await fetch(base.replace('/api', '/app.js'))).text();
+  assert.doesNotMatch(js, /supabase\.co|sb_publishable|supabase-js|createClient/);
 });
