@@ -121,12 +121,14 @@ if (auth) {
 }
 
 // 로그인 모드: 세션 쿠키의 사용자 id로 그 사람 범위의 저장소를 만든다 (모든 쿼리가 user_id로 걸러짐)
-app.use('/api', (req, res, next) => {
+// 쓰기 요청은 계정이 아직 있는지도 확인한다 (탈퇴한 계정의 다른 기기 쿠키로는 아무것도 못 쓰게)
+app.use('/api', async (req, res, next) => {
   if (!auth) {
     req.store = store;
     return next();
   }
   req.userId = auth.userId(req);
+  if (req.method !== 'GET' && !(await store.getUser(req.userId))) throw new HttpError(401, '로그인이 필요합니다.');
   req.store = store.forUser(req.userId);
   next();
 });
@@ -137,6 +139,13 @@ app.get('/api/me', async (req, res) => {
   const user = await store.getUser(req.userId);
   if (!user) throw new HttpError(401, '로그인이 필요합니다.');
   res.json({ auth: true, email: user.email });
+});
+
+// 서비스 탈퇴: 계정과 모든 사이트·점검 항목 삭제, 로그인 쿠키 삭제
+app.delete('/api/me', async (req, res) => {
+  if (!auth) throw new HttpError(400, '로그인 모드에서만 탈퇴할 수 있습니다.');
+  await store.deleteUser(req.userId);
+  auth.logout(req, res);
 });
 
 app.get('/api/todos', async (req, res) => {

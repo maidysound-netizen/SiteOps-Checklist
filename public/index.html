@@ -20,9 +20,12 @@
         <h1>SiteOps Checklist</h1>
         <p class="subtitle">Personal Website Operations Manager</p>
       </div>
-      <div id="user-box" class="user-box" hidden>
-        <span id="user-email"></span>
-        <button type="button" id="logout" class="btn small">로그아웃</button>
+      <div class="header-actions">
+        <button type="button" id="install-app" class="btn small primary">📲 앱 설치</button>
+        <div id="user-box" class="user-box" hidden>
+          <span id="user-email"></span>
+          <button type="button" id="logout" class="btn small">로그아웃</button>
+        </div>
       </div>
     </header>
 
@@ -97,7 +100,15 @@
     </section>
     </div>
 
-    <footer class="site-footer"><a href="privacy.html">개인정보처리방침</a></footer>
+    <footer class="site-footer">
+      <a href="install.html">앱 설치 방법</a>
+      <span aria-hidden="true">·</span>
+      <a href="privacy.html">개인정보처리방침</a>
+      <span id="delete-account-box" hidden>
+        <span aria-hidden="true">·</span>
+        <button type="button" id="delete-account" class="link-button">서비스 탈퇴</button>
+      </span>
+    </footer>
   </main>
 
   <dialog id="edit-dialog">

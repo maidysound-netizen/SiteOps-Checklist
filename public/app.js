@@ -239,6 +239,49 @@ $('#login-google').addEventListener('click', () => {
   location.href = '/auth/google';
 });
 
+// 서비스 탈퇴: 계정과 모든 데이터 삭제 (되돌릴 수 없으므로 두 번 확인)
+$('#delete-account').addEventListener('click', async () => {
+  if (!confirm('서비스를 탈퇴할까요?\n\n내 사이트와 점검 항목이 모두 삭제되며 되돌릴 수 없습니다.')) return;
+  if (!confirm('정말 탈퇴하시겠습니까? 삭제된 데이터는 복구할 수 없습니다.')) return;
+  try {
+    await api('/api/me', { method: 'DELETE' });
+    alert('탈퇴가 완료되었습니다. 그동안 이용해 주셔서 감사합니다.');
+    location.reload();
+  } catch (err) {
+    alert(`탈퇴하지 못했습니다: ${err.message}`);
+  }
+});
+
+// ---------- 앱 설치 (PWA) ----------
+// 크롬·엣지·삼성 인터넷은 설치 창을 바로 띄우고, 그 밖(아이폰 사파리 등)은 설치 방법 페이지로 안내한다
+let installPrompt = null;
+const isInstalled = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+if (isInstalled()) $('#install-app').hidden = true;
+
+addEventListener('beforeinstallprompt', (event) => {
+  event.preventDefault();
+  installPrompt = event;
+});
+addEventListener('appinstalled', () => {
+  $('#install-app').hidden = true;
+});
+
+$('#install-app').addEventListener('click', async () => {
+  if (!installPrompt) {
+    location.href = 'install.html';
+    return;
+  }
+  installPrompt.prompt();
+  const { outcome } = await installPrompt.userChoice;
+  installPrompt = null;
+  if (outcome === 'accepted') $('#install-app').hidden = true;
+});
+
+// 화면 파일을 저장해 두는 서비스 워커 (인터넷이 끊겨도 첫 화면이 뜨게, 일부 브라우저의 설치 조건)
+if ('serviceWorker' in navigator) {
+  addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+}
+
 $('#logout').addEventListener('click', async () => {
   await api('/auth/logout', { method: 'POST' }).catch(() => {});
   location.reload();
@@ -273,6 +316,7 @@ async function initAuth() {
   if (!me.auth) return true;
   $('#user-email').textContent = me.email ?? '';
   $('#user-box').hidden = false;
+  $('#delete-account-box').hidden = false;
   return true;
 }
 

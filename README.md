@@ -1,6 +1,6 @@
 # SiteOps Checklist
 
-웹사이트 운영 점검 항목(SSL 인증서, 도메인 갱신, 백업 등)을 관리하는 Todo 앱입니다. 누구나 무료로 쓸 수 있고, 휴대폰·PC에 앱(PWA)으로 설치할 수 있습니다. 학교 과제(To Do App)로 시작했습니다. (v4.0)
+웹사이트 운영 점검 항목(SSL 인증서, 도메인 갱신, 백업 등)을 관리하는 Todo 앱입니다. 누구나 무료로 쓸 수 있고, 휴대폰·PC에 앱(PWA)으로 설치할 수 있습니다. 학교 과제(To Do App)로 시작했습니다. (v4.1)
 
 **배포 주소: https://siteops-checklist.vercel.app** (Vercel + Turso, Google 로그인)
 
@@ -9,6 +9,8 @@
 - 확장 기능: **Google 로그인** — 사람마다 자기 사이트·점검 항목만 보고 관리 (Turso 모드)
 - 저장소: 로컬 SQLite 파일 (`db/siteops.db`, 로그인 없음) 또는 Turso(클라우드 SQLite)
 - 로그인 구조: **Google 로그인을 서버가 직접 처리**하고(별도 로그인 서비스 없음), 로그인 상태는 서명한 HttpOnly 쿠키에만 둡니다. 브라우저에는 DB 주소·토큰·Client Secret이 없습니다.
+- **앱 설치**: 머리글의 📲 앱 설치 버튼, 또는 [설치 안내](https://siteops-checklist.vercel.app/install.html) (아이폰·안드로이드·윈도우·맥)
+- **서비스 탈퇴**: 화면 맨 아래 버튼으로 계정과 모든 데이터를 즉시 삭제 ([개인정보처리방침](https://siteops-checklist.vercel.app/privacy.html))
 - 처음 가입하면 예시 사이트 2개·점검 항목 4개가 들어 있어 바로 써 볼 수 있습니다. (개인 정보 없는 일반 예시)
 
 ## 실행 방법
@@ -112,7 +114,11 @@ todo-assignment/
 └── public/
     ├── index.html    화면
     ├── app.js        화면 동작 (우리 서버 API만 호출, 키 없음)
-    └── style.css     스타일 (다크 모드 · 모바일 대응)
+    ├── style.css     스타일 (다크 모드 · 모바일 대응)
+    ├── install.html  기기별 앱 설치 안내
+    ├── privacy.html  개인정보처리방침
+    ├── sw.js         서비스 워커 (화면 파일만 저장, API는 저장 안 함)
+    └── manifest.webmanifest, icon-*.png  PWA 설치 정보·아이콘
 ```
 
 ## DB 구조
@@ -143,6 +149,7 @@ sites (1) ──< todos >── (1) categories
 | POST | `/api/sites` | 사이트 추가 (`name` 필수, `url` 선택) |
 | GET | `/api/summary` | 전체 / 미완료 / 완료 / 기한 지남 개수 |
 | GET | `/api/me` | 로그인 여부와 내 이메일 (화면용) |
+| DELETE | `/api/me` | 서비스 탈퇴: 내 계정·사이트·항목 모두 삭제 (Turso 모드만) |
 | GET | `/auth/google` | Google 로그인 시작 (Turso 모드) |
 | GET | `/auth/callback` | 로그인 후 돌아오는 주소, 토큰을 쿠키에 저장 |
 | POST | `/auth/logout` | 로그아웃 (쿠키 삭제) |

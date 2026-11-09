@@ -107,3 +107,27 @@ test('완료하면 한국 시간으로 completed_at 기록', async () => {
   assert.equal(done.completed_at.slice(0, 10), seoul);
   assert.equal(done.user_id, undefined, '응답에 user_id를 내보내지 않는다');
 });
+
+test('서비스 탈퇴: 그 사람의 계정·사이트·항목만 지워지고 다른 사람은 그대로', async () => {
+  const goneId = await store.upsertUser({ sub: 'google-gone', email: 'gone@example.com' });
+  const keep = store.forUser(await store.upsertUser({ sub: 'google-keep' }));
+  const keepBefore = await keep.summary();
+  await store.forUser(goneId).createTodo({ title: '지워질 항목' });
+
+  await store.deleteUser(goneId);
+  assert.equal(await store.getUser(goneId), null);
+  const gone = store.forUser(goneId);
+  assert.deepEqual(await gone.listTodos({ status: 'all' }), []);
+  assert.deepEqual(await gone.listSites(), []);
+  assert.deepEqual(await keep.summary(), keepBefore);
+
+  // 같은 Google 계정으로 다시 로그인하면 새 계정(새 id, 예시 데이터부터)
+  const againId = await store.upsertUser({ sub: 'google-gone' });
+  assert.notEqual(againId, goneId);
+  assert.equal((await store.forUser(againId).summary()).total, 4);
+});
+
+test('DB에 없는 계정의 쿠키로는 탈퇴·쓰기 불가(401)', async () => {
+  assert.equal((await call(sessionCookie(999), 'DELETE', '/api/me')).status, 401);
+  assert.equal((await call(sessionCookie(999), 'POST', '/api/todos', { title: 'x' })).status, 401);
+});

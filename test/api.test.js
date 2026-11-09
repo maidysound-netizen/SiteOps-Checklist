@@ -169,3 +169,9 @@ test('화면 코드에 Supabase 주소·키가 없다', async () => {
   const js = await (await fetch(base.replace('/api', '/app.js'))).text();
   assert.doesNotMatch(js, /supabase\.co|sb_publishable|supabase-js|createClient/);
 });
+
+test('로그인 없는 로컬 모드에서는 서비스 탈퇴 불가(400), 데이터는 그대로', async () => {
+  const before = (await call('GET', '/summary')).data.total;
+  assert.equal((await call('DELETE', '/me')).status, 400);
+  assert.equal((await call('GET', '/summary')).data.total, before);
+});
