@@ -79,6 +79,8 @@ v3.0에서 지웠던 Supabase + Google 로그인을 되살리되, 짝의 앱처�
 - 환경 변수: `DB_DRIVER=turso`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SESSION_SECRET` (모두 서버에만)
 - Google OAuth 리디렉션 URI가 Supabase 주소에서 우리 서버 주소(`/auth/callback`)로 바뀐다.
 - 로컬 SQLite 모드(로그인 없음)와 CLI는 그대로.
+- 정리: Supabase 조직·프로젝트 삭제 완료, Vercel 환경 변수 `SUPABASE_*` 삭제. Google OAuth 리디렉션 URI는 `http://localhost:3000/auth/callback`, `https://siteops-checklist.vercel.app/auth/callback`만 남김 (예전 Supabase·로컬 Docker 주소 삭제).
+- 남은 할 일: Vercel 서버 위치를 Turso와 같은 도쿄(`hnd1`)로, DB 정기 백업, 탈퇴(계정·데이터 삭제) 기능, Google 인증 플랫폼 앱 게시(테스트 사용자 100명 제한 해제).
 - 로그아웃은 쿠키 삭제 방식이라, 쿠키를 훔쳐 간 경우 만료(30일) 전까지 막을 수 없다. 필요하면 SESSION_SECRET을 바꿔 전체 로그아웃.
 
 아래 1~12절은 과제 기간(v1.0~v2.3)의 기획과 기록이다. 로그인 흐름·키 관리·API는 **v3.1 기준으로 고쳤다**.
@@ -304,6 +306,10 @@ Supabase 모드에서는 모든 `/api/*`에 로그인 쿠키가 필요하다 (�
 | v2.2 리뷰 결함 | 리뷰어가 찾은 문제: `is_done: "false"`(문자열)가 완료로 저장, 객체 제목이 `[object Object]`로 저장 → 타입 검사 추가 | 해결 |
 | v2.2 자동 테스트 | `npm test` 18건 통과. 고치기 전 코드로 돌리면 3건 실패(제목 타입, 메모 길이·타입, `is_done` 타입) → 테스트가 결함을 잡는 것 확인 | 통과 |
 | v2.2 마감일 비우기 | 수정 창이 보내는 빈 값('')으로 마감일·사이트·카테고리·메모를 비우면 null로 저장 (테스트 포함) | 통과 |
+| v4.0 로컬 로그인 | `.env`를 Turso + Google 값으로 채운 뒤 로컬 서버가 Turso(도쿄 리전)에 연결·테이블 자동 생성, Google 로그인 성공, 첫 가입 예시 데이터 표시 | 통과 |
+| v4.0 배포 문제 1 | Supabase 조직을 먼저 삭제해 예전 배포(v3.1, Supabase 버전)의 로그인이 끊김 → Vercel 환경 변수 설정 후 v4.0 푸시로 해결. 순서는 "새 버전 배포 → 확인 → 예전 서비스 삭제"가 안전 | 해결 |
+| v4.0 배포 문제 2 | 배포 사이트 로그인 시 `The provided client secret is invalid` → Vercel에 하나씩 입력한 `GOOGLE_CLIENT_SECRET` 값이 틀림. `.env` 값을 그대로 다시 넣고 v4.0 배포를 Redeploy(환경 변수는 다시 배포해야 적용)해서 해결. 팁: Vercel Key 칸에 `.env` 내용을 통째로 붙여 넣으면 한 번에 입력됨 | 해결 |
+| v4.0 배포 로그인 | 배포 사이트에서 Google 로그인 성공 (돌아오는 주소 `https://…/auth/callback`, 쿠키 `HttpOnly; Secure; SameSite=Lax`) | 통과 |
 | v4.0 자동 테스트 | `npm test` 33건 통과: Turso 저장소(첫 가입 예시 2·4건, 사용자 A·B 분리 — 조회·수정·삭제 불가, 남의 사이트 연결 거부 400, 사이트 이름 사람마다 허용·본인 중복 409, 한국 시간 완료 기록), Google 로그인(가짜 토큰 서버로 성공, 다른 aud·발급자·만료 거부, state 불일치·로그인 쿠키 없음 거부, 위조·만료 세션 401, 짧은 SESSION_SECRET 거부) | 통과 |
 | v3.2 CLI | `npm test` 27건 통과 (CLI 3건 추가: 목록·추가·완료·오늘 요약, 잘못된 입력 종료 코드 1). 임시 DB로 실행해 `db/siteops.db`는 건드리지 않음 | 통과 |
 | v3.1 실제 로그인 | 클라우드 프로젝트 Restore 후 로컬 서버(`127.0.0.1:3000`)에서 Google 로그인 성공, 기존 항목 표시. 로그인 전 `/api/me` 401 | 통과 |
