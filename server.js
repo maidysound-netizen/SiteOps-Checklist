@@ -1,6 +1,6 @@
 // SiteOps Checklist — Express 서버
-// 저장소: 기본 SQLite(로그인 없음), .env에 DB_DRIVER=supabase 이면 Supabase + Google 로그인
-// 로그인은 서버가 처리한다 (lib/auth.js). 브라우저에는 Supabase 주소·키·토큰이 없다.
+// 저장소: 기본 SQLite(로그인 없음), .env에 DB_DRIVER=turso 이면 Turso(클라우드 SQLite) + Google 로그인
+// 로그인은 서버가 직접 처리한다 (lib/google-auth.js). 브라우저에는 DB 주소·토큰·Client Secret이 없다.
 import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,26 +14,31 @@ const ON_VERCEL = Boolean(process.env.VERCEL);
 // 쓰는 저장소만 불러온다 (Vercel에는 SQLite 파일을 쓸 수 없음)
 async function createStore() {
   const driver = process.env.DB_DRIVER ?? 'sqlite';
+  const sqlDir = path.join(ROOT, 'db');
   if (driver === 'sqlite') {
-    if (ON_VERCEL) throw new Error('Vercel에서는 SQLite를 쓸 수 없습니다. 환경 변수에 DB_DRIVER=supabase를 설정해 주세요.');
+    if (ON_VERCEL) throw new Error('Vercel에서는 SQLite 파일을 쓸 수 없습니다. 환경 변수에 DB_DRIVER=turso를 설정해 주세요.');
     const { createSqliteStore } = await import('./lib/store-sqlite.js');
-    return createSqliteStore({
-      dbPath: process.env.DB_PATH ?? path.join(ROOT, 'db', 'siteops.db'),
-      sqlDir: path.join(ROOT, 'db'),
+    return { store: createSqliteStore({ dbPath: process.env.DB_PATH ?? path.join(sqlDir, 'siteops.db'), sqlDir }) };
+  }
+  if (driver === 'turso') {
+    const env = process.env;
+    const missing = ['TURSO_DATABASE_URL', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'SESSION_SECRET'].filter((k) => !env[k]);
+    if (missing.length) throw new Error(`DB_DRIVER=turso 이면 ${missing.join(', ')}가 필요합니다. (.env.example 참고)`);
+    const { createTursoStore } = await import('./lib/store-turso.js');
+    const { createGoogleAuth } = await import('./lib/google-auth.js');
+    const store = createTursoStore({ url: env.TURSO_DATABASE_URL, authToken: env.TURSO_AUTH_TOKEN, sqlDir });
+    const auth = createGoogleAuth({
+      clientId: env.GOOGLE_CLIENT_ID,
+      clientSecret: env.GOOGLE_CLIENT_SECRET,
+      sessionSecret: env.SESSION_SECRET,
+      users: store,
     });
+    return { store, auth };
   }
-  if (driver === 'supabase') {
-    const { SUPABASE_URL: url, SUPABASE_PUBLISHABLE_KEY: key } = process.env;
-    if (!url || !key) {
-      throw new Error('DB_DRIVER=supabase 이면 SUPABASE_URL과 SUPABASE_PUBLISHABLE_KEY가 필요합니다. (.env.example 참고)');
-    }
-    const { createSupabaseStore } = await import('./lib/store-supabase.js');
-    return createSupabaseStore({ url, key });
-  }
-  throw new Error(`알 수 없는 DB_DRIVER: ${driver} (sqlite 또는 supabase)`);
+  throw new Error(`알 수 없는 DB_DRIVER: ${driver} (sqlite 또는 turso)`);
 }
 
-const store = await createStore();
+const { store, auth } = await createStore();
 
 // ---------- 입력 검증 ----------
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -108,27 +113,30 @@ app.use(['/api', '/auth'], (req, res, next) => {
   next();
 });
 
-// Google 로그인 (Supabase 모드에서만)
-if (store.auth) {
-  app.get('/auth/google', store.auth.start);
-  app.get('/auth/callback', store.auth.callback);
-  app.post('/auth/logout', store.auth.logout);
+// Google 로그인 (Turso 모드에서만)
+if (auth) {
+  app.get('/auth/google', auth.start);
+  app.get('/auth/callback', auth.callback);
+  app.post('/auth/logout', auth.logout);
 }
 
-// 로그인 모드: 쿠키의 토큰으로 그 사용자의 저장소를 만든다 → DB RLS가 자기 데이터만 허용
-app.use('/api', async (req, res, next) => {
-  if (!store.auth) {
+// 로그인 모드: 세션 쿠키의 사용자 id로 그 사람 범위의 저장소를 만든다 (모든 쿼리가 user_id로 걸러짐)
+app.use('/api', (req, res, next) => {
+  if (!auth) {
     req.store = store;
     return next();
   }
-  req.token = await store.auth.token(req, res);
-  req.store = store.forUser(req.token);
+  req.userId = auth.userId(req);
+  req.store = store.forUser(req.userId);
   next();
 });
 
 // 화면이 로그인 상태를 확인하는 값 (SQLite 모드는 로그인 없음)
-app.get('/api/me', (req, res) => {
-  res.json(store.auth ? { auth: true, email: store.auth.email(req.token) } : { auth: false });
+app.get('/api/me', async (req, res) => {
+  if (!auth) return res.json({ auth: false });
+  const user = await store.getUser(req.userId);
+  if (!user) throw new HttpError(401, '로그인이 필요합니다.');
+  res.json({ auth: true, email: user.email });
 });
 
 app.get('/api/todos', async (req, res) => {

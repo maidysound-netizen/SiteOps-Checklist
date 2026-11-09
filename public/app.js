@@ -8,7 +8,7 @@ const state = {
 
 const $ = (selector) => document.querySelector(selector);
 
-// 이 화면은 우리 서버(/api, /auth)만 호출한다. Supabase 주소·키·로그인 토큰은 브라우저에 없다.
+// 이 화면은 우리 서버(/api, /auth)만 호출한다. DB 주소·토큰·Client Secret은 브라우저에 없다.
 // 로그인 토큰은 서버가 HttpOnly 쿠키로 관리하고, fetch가 자동으로 함께 보낸다.
 async function api(path, options = {}) {
   const res = await fetch(path, {

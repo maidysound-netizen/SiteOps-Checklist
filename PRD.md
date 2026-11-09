@@ -14,6 +14,7 @@
 | v3.0 | 2026-10-30 | **나 혼자 쓰는 앱으로 간소화.** Supabase·Google 로그인·Docker·Vercel 관련 코드와 설정을 모두 제거하고 SQLite만 남김 (아래 "0. v3.0 — 나 혼자 쓰기") |
 | v3.1 | 2026-11-02 | **짝(crystalmoon74/ToDos)의 방식으로 Supabase 로그인 부활.** 로그인을 서버가 처리(PKCE)하고 토큰은 HttpOnly 쿠키에만 보관, 브라우저에서 Supabase 키·`supabase-js` 제거, CSRF 헤더 검사, 클라우드 프로젝트 Restore (아래 "0-1. v3.1") |
 | v3.2 | 2026-11-02 | **'AI가 아는' 앱 실습:** 명령줄 진입점 `cli.js`(list·add·done·summary, 같은 SQLite 저장소 재사용), 규칙 파일 `AGENTS.md`(+`CLAUDE.md`에서 `@AGENTS.md`), 스킬 `.claude/skills/todo-summary`, CLI 테스트 3건 (아래 "0-2. v3.2") |
+| v4.0 | 2026-11-10 | **Supabase → Turso + 서버 직접 Google 로그인.** 투두앱에 Supabase는 과해서 클라우드 SQLite(Turso)로 교체, 로그인 서비스 없이 서버가 Google OAuth(PKCE)를 처리하고 서명한 HttpOnly 세션 쿠키 발급. 공개 PWA용으로 예시 데이터를 개인 정보 없는 일반 점검 항목으로 교체, 처음 가입한 사람에게 예시 자동 제공 (아래 "0-3. v4.0") |
 
 ## 0. v3.0 — 나 혼자 쓰기
 
@@ -59,6 +60,26 @@ v3.0에서 지웠던 Supabase + Google 로그인을 되살리되, 짝의 앱처�
 | 스킬 | `.claude/skills/todo-summary/SKILL.md` | `node cli.js summary` 실행 → 커밋 메시지 형식으로 정리 (실제 커밋은 안 함) |
 | 권한 연습 | `연습용-삭제해도-됨.txt` | 삭제 요청 → 승인창에서 거부 연습용 더미 파일 (`.gitignore`에 넣어 Git에 안 올림) |
 | 되돌릴 지점 | git | 코드 수정 전 커밋 `b60fd3a`. 단, Git은 코드만 되돌린다 — `db/siteops.db`는 Git에 없으므로 따로 보호 |
+
+## 0-3. v4.0 — Supabase 대신 Turso, 공개 무료 PWA
+
+목표: 이 앱을 **누구나 무료로 쓰는 PWA**로 공개한다. 투두앱 하나에 Supabase(Postgres + Auth + RLS + 대시보드)는 과하고, 무료 프로젝트 자리(2개)도 다른 작업(FPS 게임)에 필요하다.
+
+| 항목 | v3.1 (Supabase) | v4.0 (Turso) |
+| --- | --- | --- |
+| DB | Supabase Postgres (`supabase/setup.sql`) | **Turso**(클라우드 SQLite, libSQL) — 로컬 SQLite 스키마를 거의 그대로 사용 (`db/turso.sql`), 서버가 첫 요청 때 자동 생성 |
+| 로그인 | Supabase Auth가 Google과 연결, 서버는 PKCE로 중계 | **서버가 Google OAuth를 직접 처리** (state + PKCE + Client Secret, id_token의 발급자·대상·만료 확인). 로그인 서비스 없음 |
+| 세션 | Supabase access·refresh 토큰을 HttpOnly 쿠키에 | 서버가 **SESSION_SECRET으로 서명한** HttpOnly 쿠키(`sid`, 30일). 위조·만료면 401 |
+| 사용자 분리 | DB의 RLS (`user_id = auth.uid()`) | 서버 쿼리마다 `user_id = ?` + DB 트리거(남의 사이트에 항목 연결 금지). 응답에서 `user_id`는 뺌 |
+| 브라우저에 있는 비밀 값 | 없음 | 없음 (그대로) |
+| 시간 | Postgres `Asia/Seoul` | Turso는 UTC → `+9 hours`로 한국 시간 계산 |
+| 예시 데이터 | 만든 사람의 개인 사이트·개인 점검 항목 | **일반 예시**: 내 블로그·회사 홈페이지 / 관리자 비밀번호·2단계 인증, 배포 후 동작 확인, 백업 복원 테스트, SSL 인증서 만료일. 처음 가입한 사람에게 자동으로 넣어 줌 |
+| 지운 것 | — | `lib/store-supabase.js`, `lib/auth.js`, `supabase/` 폴더, `@supabase/supabase-js` |
+
+- 환경 변수: `DB_DRIVER=turso`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SESSION_SECRET` (모두 서버에만)
+- Google OAuth 리디렉션 URI가 Supabase 주소에서 우리 서버 주소(`/auth/callback`)로 바뀐다.
+- 로컬 SQLite 모드(로그인 없음)와 CLI는 그대로.
+- 로그아웃은 쿠키 삭제 방식이라, 쿠키를 훔쳐 간 경우 만료(30일) 전까지 막을 수 없다. 필요하면 SESSION_SECRET을 바꿔 전체 로그아웃.
 
 아래 1~12절은 과제 기간(v1.0~v2.3)의 기획과 기록이다. 로그인 흐름·키 관리·API는 **v3.1 기준으로 고쳤다**.
 
@@ -283,6 +304,7 @@ Supabase 모드에서는 모든 `/api/*`에 로그인 쿠키가 필요하다 (�
 | v2.2 리뷰 결함 | 리뷰어가 찾은 문제: `is_done: "false"`(문자열)가 완료로 저장, 객체 제목이 `[object Object]`로 저장 → 타입 검사 추가 | 해결 |
 | v2.2 자동 테스트 | `npm test` 18건 통과. 고치기 전 코드로 돌리면 3건 실패(제목 타입, 메모 길이·타입, `is_done` 타입) → 테스트가 결함을 잡는 것 확인 | 통과 |
 | v2.2 마감일 비우기 | 수정 창이 보내는 빈 값('')으로 마감일·사이트·카테고리·메모를 비우면 null로 저장 (테스트 포함) | 통과 |
+| v4.0 자동 테스트 | `npm test` 33건 통과: Turso 저장소(첫 가입 예시 2·4건, 사용자 A·B 분리 — 조회·수정·삭제 불가, 남의 사이트 연결 거부 400, 사이트 이름 사람마다 허용·본인 중복 409, 한국 시간 완료 기록), Google 로그인(가짜 토큰 서버로 성공, 다른 aud·발급자·만료 거부, state 불일치·로그인 쿠키 없음 거부, 위조·만료 세션 401, 짧은 SESSION_SECRET 거부) | 통과 |
 | v3.2 CLI | `npm test` 27건 통과 (CLI 3건 추가: 목록·추가·완료·오늘 요약, 잘못된 입력 종료 코드 1). 임시 DB로 실행해 `db/siteops.db`는 건드리지 않음 | 통과 |
 | v3.1 실제 로그인 | 클라우드 프로젝트 Restore 후 로컬 서버(`127.0.0.1:3000`)에서 Google 로그인 성공, 기존 항목 표시. 로그인 전 `/api/me` 401 | 통과 |
 | v3.1 배포 로그인 | 배포 사이트에서 Google 로그인 성공. 돌아오는 주소가 `https://…/auth/callback`, 쿠키가 `HttpOnly; Secure; SameSite=Lax`, 로그인 전 API 401 | 통과 |

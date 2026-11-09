@@ -1,5 +1,5 @@
 // SiteOps Checklist — 명령줄(CLI) 진입점
-// 웹 앱과 같은 SQLite 저장소(lib/store-sqlite.js)를 그대로 쓴다. 클라우드(Supabase)에는 접속하지 않는다.
+// 웹 앱과 같은 SQLite 저장소(lib/store-sqlite.js)를 그대로 쓴다. 클라우드(Turso)에는 접속하지 않는다.
 //   node cli.js list               목록
 //   node cli.js add "<내용>"        추가
 //   node cli.js done <번호>         완료

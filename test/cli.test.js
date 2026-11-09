@@ -28,7 +28,7 @@ test('list: 예시 데이터 4건, 완료는 [x]', () => {
   const { code, out } = cli('list');
   assert.equal(code, 0);
   assert.equal(out.trim().split('\n').length, 4);
-  assert.match(out, /^\[x\] 4\. GitHub 저장소 비공개 설정 확인/m);
+  assert.match(out, /^\[x\] 4\. SSL 인증서 만료일 확인/m);
 });
 
 test('add → done → summary: 오늘 완료에 나타난다', () => {
