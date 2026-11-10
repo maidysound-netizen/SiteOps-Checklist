@@ -16,6 +16,17 @@ CREATE TABLE IF NOT EXISTS users (
   session_version INTEGER NOT NULL DEFAULT 0
 );
 
+-- DBSC 기기 세션: 로그인을 기기에 묶을 때 그 기기의 공개 키를 저장 (lib/dbsc.js)
+CREATE TABLE IF NOT EXISTS device_sessions (
+  id              TEXT    PRIMARY KEY,
+  user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  alg             TEXT    NOT NULL CHECK (alg IN ('ES256', 'RS256')),
+  jwk             TEXT    NOT NULL,
+  session_version INTEGER NOT NULL,
+  created_at      TEXT    NOT NULL DEFAULT (datetime('now', '+9 hours'))
+);
+CREATE INDEX IF NOT EXISTS idx_device_sessions_user ON device_sessions (user_id);
+
 -- 관리 대상 사이트 (사용자마다 이름 고유)
 CREATE TABLE IF NOT EXISTS sites (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -11,7 +11,7 @@
 - 로그인 구조: **Google 로그인을 서버가 직접 처리**하고(별도 로그인 서비스 없음), 로그인 상태는 서명한 HttpOnly 쿠키에만 둡니다. 브라우저에는 DB 주소·토큰·Client Secret이 없습니다.
 - **앱 설치**: 머리글의 📲 앱 설치 버튼, 또는 [설치 안내](https://siteops-checklist.vercel.app/install.html) (아이폰·안드로이드·윈도우·맥)
 - **서비스 탈퇴**: 화면 맨 아래 버튼으로 계정과 모든 데이터를 즉시 삭제 ([개인정보처리방침](https://siteops-checklist.vercel.app/privacy.html))
-- 보안: 보안 헤더(CSP·다른 사이트에 끼워 넣기 금지), IP별 요청 횟수 제한(초과 시 429), 로그인 쿠키 7일(쓰는 동안 자동 연장), **모든 기기에서 로그아웃**
+- 보안: 보안 헤더(CSP·다른 사이트에 끼워 넣기 금지), IP별 요청 횟수 제한(초과 시 429), 로그인 쿠키 7일(쓰는 동안 자동 연장), **모든 기기에서 로그아웃**, **DBSC**(지원 브라우저에서는 로그인을 기기에 묶어 쿠키를 복사해 가도 10분 뒤 무효)
 - 처음 가입하면 예시 사이트 2개·점검 항목 4개가 들어 있어 바로 써 볼 수 있습니다. (개인 정보 없는 일반 예시)
 
 ## 실행 방법
@@ -107,6 +107,7 @@ todo-assignment/
 │   ├── google-auth.js     서버 Google 로그인 (OAuth + PKCE, 서명한 HttpOnly 세션 쿠키)
 │   ├── examples.js        처음 가입한 사람에게 넣는 예시 데이터
 │   ├── security.js        보안 헤더 · IP별 요청 횟수 제한
+│   ├── dbsc.js            DBSC: 로그인을 기기 키에 묶기 (등록 · 10분마다 갱신)
 │   └── errors.js          공통 오류
 ├── db/
 │   ├── schema.sql    테이블 · 인덱스 · 트리거 · 뷰 (로컬 SQLite)
@@ -157,6 +158,8 @@ sites (1) ──< todos >── (1) categories
 | GET | `/auth/google` | Google 로그인 시작 (Turso 모드) |
 | GET | `/auth/callback` | 로그인 후 돌아오는 주소, 토큰을 쿠키에 저장 |
 | POST | `/auth/logout` | 로그아웃 (쿠키 삭제) |
+| POST | `/auth/dbsc/register` | DBSC 기기 등록 (브라우저가 직접 호출) |
+| POST | `/auth/dbsc/refresh` | DBSC 기기 쿠키 갱신 (브라우저가 직접 호출) |
 
 Turso 모드에서는 로그인 쿠키가 없으면 `/api/*`가 401을 돌려줍니다.
 

@@ -127,8 +127,11 @@ app.use(express.static(path.join(ROOT, 'public')));
 
 // 쓰기 요청은 우리 화면(app.js)이 붙이는 헤더가 있어야 한다.
 // 로그인이 쿠키 방식이라, 다른 사이트가 몰래 보내는 요청(CSRF)을 막기 위함 (다른 사이트는 이 헤더를 붙이면 CORS에 막힘)
+// 단, 브라우저가 직접 보내는 DBSC 요청(/auth/dbsc/*)은 이 헤더가 없다 → 대신 기기 키 서명 + 서버가 서명한 문제로 확인
 app.use(['/api', '/auth'], (req, res, next) => {
-  if (req.method !== 'GET' && req.get('x-requested-with') !== 'fetch') throw new HttpError(403, '잘못된 요청입니다.');
+  if (req.method !== 'GET' && !req.originalUrl.startsWith('/auth/dbsc/') && req.get('x-requested-with') !== 'fetch') {
+    throw new HttpError(403, '잘못된 요청입니다.');
+  }
   next();
 });
 
@@ -137,6 +140,15 @@ if (auth) {
   app.get('/auth/google', auth.start);
   app.get('/auth/callback', auth.callback);
   app.post('/auth/logout', auth.logout);
+  // DBSC: 로그인을 이 기기에 묶기 (지원 브라우저만 호출)
+  app.use('/auth/dbsc', rateLimit({ windowMs: 10 * MINUTE, max: 100 }));
+  app.post('/auth/dbsc/register', async (req, res) => {
+    const session = auth.session(req);
+    const user = await store.getUser(session.uid);
+    if (!user || (user.session_version ?? 0) !== session.v) throw new HttpError(401, '로그인이 필요합니다.');
+    await auth.dbsc.register(req, res, session);
+  });
+  app.post('/auth/dbsc/refresh', auth.dbsc.refresh);
 }
 
 // 로그인 모드: 세션 쿠키의 사용자 id로 그 사람 범위의 저장소를 만든다 (모든 쿼리가 user_id로 걸러짐)
@@ -153,6 +165,7 @@ app.use('/api', async (req, res, next) => {
   auth.renew(req, res, session);
   req.userId = session.uid;
   req.user = user;
+  req.session = session;
   req.store = store.forUser(session.uid);
   next();
 });
@@ -160,21 +173,22 @@ app.use('/api', async (req, res, next) => {
 // 화면이 로그인 상태를 확인하는 값 (SQLite 모드는 로그인 없음)
 app.get('/api/me', async (req, res) => {
   if (!auth) return res.json({ auth: false });
-  res.json({ auth: true, email: req.user.email });
+  auth.dbsc.offer(req, res, req.session); // 지원 브라우저에 "이 기기에 로그인 묶기" 제안
+  res.json({ auth: true, email: req.user.email, deviceBound: Boolean(req.session.ds) });
 });
 
 // 서비스 탈퇴: 계정과 모든 사이트·점검 항목 삭제, 로그인 쿠키 삭제
 app.delete('/api/me', async (req, res) => {
   if (!auth) throw new HttpError(400, '로그인 모드에서만 탈퇴할 수 있습니다.');
   await store.deleteUser(req.userId);
-  auth.logout(req, res);
+  await auth.logout(req, res);
 });
 
 // 모든 기기에서 로그아웃: 이 사람의 모든 로그인 쿠키를 무효로 하고, 이 기기의 쿠키도 지운다
 app.post('/api/logout-all', async (req, res) => {
   if (!auth) throw new HttpError(400, '로그인 모드에서만 쓸 수 있습니다.');
   await store.bumpSessionVersion(req.userId);
-  auth.logout(req, res);
+  await auth.logout(req, res);
 });
 
 app.get('/api/todos', async (req, res) => {
