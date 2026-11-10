@@ -5,6 +5,7 @@ import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { HttpError, notFound } from './lib/errors.js';
+import { rateLimit, securityHeaders } from './lib/security.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT ?? 3000);
@@ -103,7 +104,25 @@ function parseSiteInput(body = {}) {
 const app = express();
 // Vercel 프록시 뒤에서만 X-Forwarded-* 헤더를 믿는다 (https 주소·Secure 쿠키 판단)
 if (ON_VERCEL) app.set('trust proxy', true);
-app.use(express.json());
+app.disable('x-powered-by'); // 서버 종류(Express)를 알리지 않음
+app.use(securityHeaders);
+
+// 요청 횟수 제한 (IP마다): 로그인 시작은 10분에 30번, API는 1분에 300번, 그중 쓰기는 1분에 60번
+const MINUTE = 60_000;
+app.use(
+  '/auth/google',
+  rateLimit({
+    windowMs: 10 * MINUTE,
+    max: 30,
+    message: '로그인 시도가 너무 많습니다. 10분 뒤에 다시 시도해 주세요.',
+    onLimit: (req, res, message) => res.redirect(`/?login_error=${encodeURIComponent(message)}`),
+  }),
+);
+app.use('/api', rateLimit({ windowMs: MINUTE, max: 300 }));
+const writeLimit = rateLimit({ windowMs: MINUTE, max: 60 });
+app.use('/api', (req, res, next) => (req.method === 'GET' ? next() : writeLimit(req, res, next)));
+
+app.use(express.json({ limit: '20kb' }));
 app.use(express.static(path.join(ROOT, 'public')));
 
 // 쓰기 요청은 우리 화면(app.js)이 붙이는 헤더가 있어야 한다.
@@ -208,6 +227,7 @@ app.use('/api', (req, res) => {
 app.use((err, req, res, next) => {
   if (err instanceof HttpError) return res.status(err.status).json({ error: err.message });
   if (err.type === 'entity.parse.failed') return res.status(400).json({ error: '요청 형식(JSON)이 올바르지 않습니다.' });
+  if (err.type === 'entity.too.large') return res.status(413).json({ error: '요청 내용이 너무 큽니다.' });
   console.error(err);
   res.status(500).json({ error: '서버 오류가 발생했습니다.' });
 });

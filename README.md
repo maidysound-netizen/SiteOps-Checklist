@@ -11,6 +11,7 @@
 - 로그인 구조: **Google 로그인을 서버가 직접 처리**하고(별도 로그인 서비스 없음), 로그인 상태는 서명한 HttpOnly 쿠키에만 둡니다. 브라우저에는 DB 주소·토큰·Client Secret이 없습니다.
 - **앱 설치**: 머리글의 📲 앱 설치 버튼, 또는 [설치 안내](https://siteops-checklist.vercel.app/install.html) (아이폰·안드로이드·윈도우·맥)
 - **서비스 탈퇴**: 화면 맨 아래 버튼으로 계정과 모든 데이터를 즉시 삭제 ([개인정보처리방침](https://siteops-checklist.vercel.app/privacy.html))
+- 보안: 보안 헤더(CSP·다른 사이트에 끼워 넣기 금지), IP별 요청 횟수 제한(초과 시 429)
 - 처음 가입하면 예시 사이트 2개·점검 항목 4개가 들어 있어 바로 써 볼 수 있습니다. (개인 정보 없는 일반 예시)
 
 ## 실행 방법
@@ -105,6 +106,7 @@ todo-assignment/
 │   ├── store-turso.js     Turso 저장소 (모든 쿼리를 로그인한 사용자 user_id로)
 │   ├── google-auth.js     서버 Google 로그인 (OAuth + PKCE, 서명한 HttpOnly 세션 쿠키)
 │   ├── examples.js        처음 가입한 사람에게 넣는 예시 데이터
+│   ├── security.js        보안 헤더 · IP별 요청 횟수 제한
 │   └── errors.js          공통 오류
 ├── db/
 │   ├── schema.sql    테이블 · 인덱스 · 트리거 · 뷰 (로컬 SQLite)
@@ -115,7 +117,7 @@ todo-assignment/
     ├── index.html    화면
     ├── app.js        화면 동작 (우리 서버 API만 호출, 키 없음)
     ├── style.css     스타일 (다크 모드 · 모바일 대응)
-    ├── install.html  기기별 앱 설치 안내
+    ├── install.html  기기별 앱 설치 안내 (+ install.js)
     ├── privacy.html  개인정보처리방침
     ├── sw.js         서비스 워커 (화면 파일만 저장, API는 저장 안 함)
     └── manifest.webmanifest, icon-*.png  PWA 설치 정보·아이콘

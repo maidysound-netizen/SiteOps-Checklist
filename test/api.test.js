@@ -175,3 +175,23 @@ test('로그인 없는 로컬 모드에서는 서비스 탈퇴 불가(400), 데�
   assert.equal((await call('DELETE', '/me')).status, 400);
   assert.equal((await call('GET', '/summary')).data.total, before);
 });
+
+test('보안 헤더: CSP·frame 차단·nosniff, 서버 종류는 숨김', async () => {
+  const res = await fetch(base.replace('/api', '/'));
+  assert.match(res.headers.get('content-security-policy'), /script-src 'self'.*frame-ancestors 'none'/);
+  assert.equal(res.headers.get('x-frame-options'), 'DENY');
+  assert.equal(res.headers.get('x-content-type-options'), 'nosniff');
+  assert.equal(res.headers.get('x-powered-by'), null);
+});
+
+test('너무 큰 요청은 413', async () => {
+  const { status } = await call('POST', '/todos', null, { raw: JSON.stringify({ title: 'x', memo: 'a'.repeat(30_000) }) });
+  assert.equal(status, 413);
+});
+
+test('쓰기 요청은 IP마다 1분에 60번까지, 넘으면 429', async () => {
+  const results = [];
+  for (let i = 0; i < 70; i++) results.push((await call('POST', '/todos', { title: '' })).status);
+  assert.ok(results.includes(400), '제한 전에는 평소처럼 검사');
+  assert.equal(results.at(-1), 429);
+});

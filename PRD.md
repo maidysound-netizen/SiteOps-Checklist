@@ -95,6 +95,8 @@ v3.0에서 지웠던 Supabase + Google 로그인을 되살리되, 짝의 앱처�
 | 설치 안내 | `install.html`: 아이폰·아이패드(Safari 공유 → 홈 화면에 추가), 안드로이드(Chrome, 삼성 인터넷), **윈도우(Edge·Chrome)**, 맥(Chrome, Safari Dock에 추가). 접속한 기기의 안내로 자동 이동 |
 | 서비스 워커 | `sw.js`: 화면 파일만 저장(네트워크 우선, 끊기면 저장본). `/api/`·`/auth/`는 저장하지 않음 → 점검 데이터는 기기에 남지 않음 |
 | 아이콘 | 안드로이드 둥근 아이콘용 maskable 아이콘(`icon-maskable-512.png`) 추가 |
+| 보안 헤더 | `lib/security.js`: CSP(우리 서버 파일만, 인라인 스크립트 금지 → 설치 안내 스크립트를 `install.js`로 분리), `frame-ancestors 'none'`·`X-Frame-Options: DENY`(다른 사이트에 끼워 넣기 금지), `nosniff`, Referrer·Permissions 정책, https면 HSTS. `X-Powered-By` 숨김 |
+| 요청 횟수 제한 | IP마다 로그인 시작 10분 30번(넘으면 로그인 화면에 안내), API 1분 300번, 그중 쓰기 1분 60번 → 넘으면 429. 요청 본문 20KB 초과 413. 서버 메모리에 세므로 Vercel에서는 서버마다 따로 셈 → 완벽한 차단이 아니라 남용·Turso 사용량 소모를 늦추는 용도. 더 강하게 막으려면 Vercel 방화벽 규칙 |
 | 개인정보처리방침 | 탈퇴 방법(즉시·전부·복구 불가), 앱 삭제 ≠ 계정 삭제, 쿠키 2종·광고 쿠키 없음, 기기에는 화면 파일만 저장. 시행일 2026-11-10 |
 
 아래 1~12절은 과제 기간(v1.0~v2.3)의 기획과 기록이다. 로그인 흐름·키 관리·API는 **v3.1 기준으로 고쳤다**.
@@ -326,6 +328,8 @@ Supabase 모드에서는 모든 `/api/*`에 로그인 쿠키가 필요하다 (�
 | v4.0 배포 로그인 | 배포 사이트에서 Google 로그인 성공 (돌아오는 주소 `https://…/auth/callback`, 쿠키 `HttpOnly; Secure; SameSite=Lax`) | 통과 |
 | v4.0 자동 테스트 | `npm test` 33건 통과: Turso 저장소(첫 가입 예시 2·4건, 사용자 A·B 분리 — 조회·수정·삭제 불가, 남의 사이트 연결 거부 400, 사이트 이름 사람마다 허용·본인 중복 409, 한국 시간 완료 기록), Google 로그인(가짜 토큰 서버로 성공, 다른 aud·발급자·만료 거부, state 불일치·로그인 쿠키 없음 거부, 위조·만료 세션 401, 짧은 SESSION_SECRET 거부) | 통과 |
 | v4.1 자동 테스트 | `npm test` 36건 통과: 탈퇴 시 그 사람의 계정·사이트·항목만 삭제되고 다른 사람은 그대로, 같은 Google 계정 재가입은 새 id + 예시 데이터, DB에 없는 계정 쿠키로 탈퇴·쓰기 401, 로컬 모드 탈퇴 400 | 통과 |
+| v4.1 보안 점검 | 공개 저장소 전체 이력 검사: Google Client Secret·Turso 토큰·SESSION_SECRET·Supabase 키 실제 값 없음, `.env`·DB 파일 커밋된 적 없음, `npm audit` 0건. 예전 커밋에 개인 예시(사이트 이름·항목 제목)가 남아 있으나 주소·비밀 값은 없어 이력 재작성은 하지 않음 | 확인 |
+| v4.1 보안 헤더·요청 제한 | `npm test` 41건 통과(CSP·frame 차단·nosniff·X-Powered-By 없음, 20KB 초과 413, 쓰기 61번째부터 429, 제한 단위 테스트). Chrome에서 CSP 위반 없음, 서비스 워커 활성·화면 파일 11개 저장 | 통과 |
 | v3.2 CLI | `npm test` 27건 통과 (CLI 3건 추가: 목록·추가·완료·오늘 요약, 잘못된 입력 종료 코드 1). 임시 DB로 실행해 `db/siteops.db`는 건드리지 않음 | 통과 |
 | v3.1 실제 로그인 | 클라우드 프로젝트 Restore 후 로컬 서버(`127.0.0.1:3000`)에서 Google 로그인 성공, 기존 항목 표시. 로그인 전 `/api/me` 401 | 통과 |
 | v3.1 배포 로그인 | 배포 사이트에서 Google 로그인 성공. 돌아오는 주소가 `https://…/auth/callback`, 쿠키가 `HttpOnly; Secure; SameSite=Lax`, 로그인 전 API 401 | 통과 |
