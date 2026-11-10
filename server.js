@@ -125,6 +125,21 @@ app.use('/api', (req, res, next) => (req.method === 'GET' ? next() : writeLimit(
 app.use(express.json({ limit: '20kb' }));
 app.use(express.static(path.join(ROOT, 'public')));
 
+// 보안 취약점 제보 안내 (RFC 9116). 점(.)으로 시작하는 폴더는 static이 내보내지 않아 직접 응답
+app.get('/.well-known/security.txt', (req, res) => {
+  const site = `${req.protocol}://${req.get('host')}`;
+  res.type('text/plain').send(
+    [
+      'Contact: mailto:maidysound@gmail.com',
+      'Expires: 2027-11-10T00:00:00.000Z',
+      'Preferred-Languages: ko, en',
+      `Canonical: ${site}/.well-known/security.txt`,
+      `Policy: ${site}/security.html`,
+      '',
+    ].join('\n'),
+  );
+});
+
 // 쓰기 요청은 우리 화면(app.js)이 붙이는 헤더가 있어야 한다.
 // 로그인이 쿠키 방식이라, 다른 사이트가 몰래 보내는 요청(CSRF)을 막기 위함 (다른 사이트는 이 헤더를 붙이면 CORS에 막힘)
 // 단, 브라우저가 직접 보내는 DBSC 요청(/auth/dbsc/*)은 이 헤더가 없다 → 대신 기기 키 서명 + 서버가 서명한 문제로 확인

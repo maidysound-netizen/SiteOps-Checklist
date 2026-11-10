@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>보안 · SiteOps Checklist</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="/icon-192.png">
+  <meta name="theme-color" content="#2563eb">
+</head>
+<body>
+  <main class="container">
+    <header class="page-header">
+      <div>
+        <h1>🛡️ 이 앱을 뚫어 보려는 분께</h1>
+        <p class="subtitle">무료 Todo 앱이라고 만만하게 보셨다면, 아래를 먼저 읽어 보세요. 전부 실제로 동작하고 자동 테스트로 매번 확인하는 내용입니다.</p>
+      </div>
+    </header>
+
+    <section class="panel policy">
+      <h2>🔑 1. 훔칠 비밀 값이 브라우저에 없습니다</h2>
+      <ul>
+        <li>화면 코드 어디에도 DB 주소, DB 토큰, Google Client Secret이 없습니다. 개발자 도구를 열어 봐도 나오는 건 우리 서버 주소뿐입니다.</li>
+        <li>비밀 값은 서버 환경 변수에만 있고, 공개 GitHub 저장소의 <strong>전체 커밋 이력</strong>까지 검사해 한 번도 올라간 적 없음을 확인했습니다.</li>
+      </ul>
+
+      <h2>🎫 2. Google 로그인은 서버가 직접, 4중으로 확인합니다</h2>
+      <ul>
+        <li><strong>state</strong> 값으로 로그인 가로채기를 막고, <strong>PKCE(S256)</strong>로 중간에 빼낸 인증 코드를 쓸모없게 만듭니다.</li>
+        <li>코드는 서버가 <strong>Client Secret</strong>과 함께 Google에 직접 TLS로 교환합니다.</li>
+        <li>받은 토큰의 <strong>발급자·대상 앱·만료 시각·사용자 ID</strong>를 하나하나 검사합니다. 다른 앱의 토큰이나 만료된 토큰은 바로 거절합니다.</li>
+      </ul>
+
+      <h2>🍪 3. 쿠키를 위조하거나 훔쳐도 소용없게</h2>
+      <ul>
+        <li>로그인 쿠키는 <strong>HMAC-SHA256</strong>으로 서명하고, 서명 비교는 시간차 공격이 통하지 않는 <strong>상수 시간 비교</strong>로 합니다. 한 글자만 바꿔도 401입니다.</li>
+        <li><strong>HttpOnly</strong>(스크립트로 못 읽음), <strong>Secure</strong>(https로만 전송), <strong>SameSite=Lax</strong>(다른 사이트에서 못 씀).</li>
+        <li>유효 기간은 7일. 쓰는 동안만 자동으로 연장됩니다.</li>
+      </ul>
+
+      <h2>🔐 4. 로그인을 기기 칩에 묶습니다 (DBSC)</h2>
+      <ul>
+        <li>지원하는 브라우저에서는 최신 웹 표준 초안인 <strong>Device Bound Session Credentials</strong>로 로그인을 기기에 묶습니다.</li>
+        <li>기기의 보안 칩(TPM 등) 안에서 <strong>밖으로 꺼낼 수 없는 키</strong>를 만들고, 10분마다 서버가 낸 문제에 그 키로 서명해야 로그인이 이어집니다.</li>
+        <li>쿠키를 통째로 복사해 가도 그 키가 없으니 <strong>최대 10분 뒤 쓸모없어집니다.</strong> 다른 키로 서명하면 그 자리에서 세션이 끝납니다.</li>
+      </ul>
+
+      <h2>🚪 5. 털렸다 싶으면 버튼 하나로 전부 끊습니다</h2>
+      <ul>
+        <li><strong>모든 기기에서 로그아웃</strong>을 누르면 그 계정의 쿠키 "세대 번호"가 바뀌어, 지금까지 발급된 모든 로그인 쿠키와 기기 등록이 한 번에 무효가 됩니다.</li>
+        <li>서버는 요청마다 계정이 살아 있는지, 세대 번호가 맞는지 확인합니다.</li>
+      </ul>
+
+      <h2>🧱 6. 남의 데이터는 두 겹으로 막혀 있습니다</h2>
+      <ul>
+        <li>모든 조회·수정·삭제 쿼리가 로그인한 사용자 번호로 걸러집니다. 남의 항목 번호를 넣어 봐야 "없는 항목"입니다.</li>
+        <li>서버 코드가 실수하더라도, <strong>데이터베이스 트리거</strong>가 남의 사이트에 항목을 붙이는 것을 한 번 더 거부합니다.</li>
+        <li>SQL은 전부 값 바인딩으로 실행하고, 열 이름은 허용 목록에서만 가져옵니다. SQL 인젝션을 넣을 자리가 없습니다.</li>
+      </ul>
+
+      <h2>🧰 7. 브라우저 쪽 방어막</h2>
+      <ul>
+        <li><strong>CSP</strong>: 우리 서버의 파일만 실행되고, HTML에 끼워 넣은 스크립트는 실행되지 않습니다.</li>
+        <li><strong>클릭재킹 차단</strong>: 다른 사이트가 이 앱을 자기 화면 안에 띄울 수 없습니다.</li>
+        <li><strong>CSRF 차단</strong>: 쓰기 요청은 우리 화면만 붙이는 전용 헤더가 있어야 합니다.</li>
+        <li><strong>HSTS</strong>, <strong>nosniff</strong>, Referrer·Permissions 정책. 서버 종류도 알려 주지 않습니다.</li>
+        <li>사용자가 입력한 글은 HTML이 아닌 글자 그대로만 화면에 표시합니다.</li>
+      </ul>
+
+      <h2>⏱️ 8. 무작정 두드리면 막힙니다</h2>
+      <ul>
+        <li>IP마다 요청 횟수를 셉니다. 로그인 시도, API 호출, 쓰기 요청이 각각 한도를 넘으면 429로 거절합니다.</li>
+        <li>입력값은 종류·길이·형식을 모두 검사하고, 20KB가 넘는 요청은 받지 않습니다.</li>
+      </ul>
+
+      <h2>🧪 9. 공격 시나리오를 매번 자동으로 돌립니다</h2>
+      <ul>
+        <li>코드를 바꿀 때마다 <strong>자동 테스트 50건 이상</strong>이 돌아갑니다. 위조·만료 쿠키, 남의 데이터 조회·수정·삭제, 다른 앱의 토큰, 위조한 기기 서명, 남의 기기 문제 재사용, 탈퇴 후 남은 쿠키, 요청 폭주 같은 공격을 직접 시도해 전부 막히는지 확인합니다.</li>
+        <li>사용하는 외부 패키지의 알려진 취약점 검사(npm audit): 0건.</li>
+      </ul>
+
+      <h2>📮 취약점을 찾으셨다면</h2>
+      <p>완벽한 보안은 없습니다. 그래서 찾아 주시는 분을 환영합니다. 다른 사용자의 데이터에 손대지 말고, 아래 주소로 알려 주세요. 확인하고 고친 뒤 감사 인사를 드리겠습니다.</p>
+      <p>maidysound@gmail.com · <a href="/.well-known/security.txt">security.txt</a></p>
+
+      <p><a href="/">← SiteOps Checklist로 돌아가기</a> · <a href="privacy.html">개인정보처리방침</a></p>
+    </section>
+  </main>
+</body>
+</html>

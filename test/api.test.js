@@ -202,6 +202,16 @@ test('로컬 모드에서는 모든 기기 로그아웃 불가(400)', async () =
   assert.equal((await call('POST', '/logout-all')).status, 400);
 });
 
+test('보안 소개 페이지와 security.txt', async () => {
+  const root = base.replace('/api', '');
+  assert.equal((await fetch(`${root}/security.html`)).status, 200);
+  const txt = await fetch(`${root}/.well-known/security.txt`);
+  assert.equal(txt.status, 200);
+  const body = await txt.text();
+  assert.match(body, /^Contact: mailto:/m);
+  assert.match(body, /^Expires: /m);
+});
+
 // 쓰기 제한을 다 써 버리므로 이 파일의 마지막 테스트로 둔다
 test('쓰기 요청은 IP마다 1분에 60번까지, 넘으면 429', async () => {
   const results = [];

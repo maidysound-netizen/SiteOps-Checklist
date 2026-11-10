@@ -12,6 +12,7 @@
 - **앱 설치**: 머리글의 📲 앱 설치 버튼, 또는 [설치 안내](https://siteops-checklist.vercel.app/install.html) (아이폰·안드로이드·윈도우·맥)
 - **서비스 탈퇴**: 화면 맨 아래 버튼으로 계정과 모든 데이터를 즉시 삭제 ([개인정보처리방침](https://siteops-checklist.vercel.app/privacy.html))
 - 보안: 보안 헤더(CSP·다른 사이트에 끼워 넣기 금지), IP별 요청 횟수 제한(초과 시 429), 로그인 쿠키 7일(쓰는 동안 자동 연장), **모든 기기에서 로그아웃**, **DBSC**(지원 브라우저에서는 로그인을 기기에 묶어 쿠키를 복사해 가도 10분 뒤 무효)
+- 🛡️ 보안 소개: [security.html](https://siteops-checklist.vercel.app/security.html), 취약점 제보: [/.well-known/security.txt](https://siteops-checklist.vercel.app/.well-known/security.txt)
 - 처음 가입하면 예시 사이트 2개·점검 항목 4개가 들어 있어 바로 써 볼 수 있습니다. (개인 정보 없는 일반 예시)
 
 ## 실행 방법

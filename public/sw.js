@@ -1,7 +1,7 @@
 // SiteOps Checklist 서비스 워커 — 화면 파일만 저장해 두고, 인터넷이 끊겼을 때 대신 보여 준다
 // 데이터(/api)와 로그인(/auth)은 절대 저장하지 않고 항상 서버에서 받는다.
 // 화면 파일도 항상 서버에서 먼저 받아(네트워크 우선) 새 버전이 바로 반영되게 한다.
-const CACHE = 'siteops-shell-v2';
+const CACHE = 'siteops-shell-v3';
 const SHELL = [
   '/',
   '/index.html',
@@ -10,6 +10,7 @@ const SHELL = [
   '/install.html',
   '/install.js',
   '/privacy.html',
+  '/security.html',
   '/manifest.webmanifest',
   '/icon-192.png',
   '/icon-512.png',
