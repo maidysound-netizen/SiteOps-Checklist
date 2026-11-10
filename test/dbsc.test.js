@@ -18,10 +18,11 @@ Object.assign(process.env, {
   GOOGLE_CLIENT_ID: 'test-client.apps.googleusercontent.com',
   GOOGLE_CLIENT_SECRET: 'test-client-secret',
   SESSION_SECRET: SECRET,
+  DATA_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
 });
 const { default: app } = await import('../server.js');
 const { createTursoStore } = await import('../lib/store-turso.js');
-const store = createTursoStore({ url: DB_URL, sqlDir: fileURLToPath(new URL('../db', import.meta.url)) });
+const store = createTursoStore({ url: DB_URL, sqlDir: fileURLToPath(new URL('../db', import.meta.url)), dataKey: process.env.DATA_ENCRYPTION_KEY });
 
 const server = app.listen(0, '127.0.0.1');
 await new Promise((resolve) => server.once('listening', resolve));

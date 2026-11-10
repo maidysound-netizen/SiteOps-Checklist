@@ -23,11 +23,18 @@ async function createStore() {
   }
   if (driver === 'turso') {
     const env = process.env;
-    const missing = ['TURSO_DATABASE_URL', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'SESSION_SECRET'].filter((k) => !env[k]);
+    const missing = ['TURSO_DATABASE_URL', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'SESSION_SECRET', 'DATA_ENCRYPTION_KEY'].filter(
+      (k) => !env[k],
+    );
     if (missing.length) throw new Error(`DB_DRIVER=turso 이면 ${missing.join(', ')}가 필요합니다. (.env.example 참고)`);
     const { createTursoStore } = await import('./lib/store-turso.js');
     const { createGoogleAuth } = await import('./lib/google-auth.js');
-    const store = createTursoStore({ url: env.TURSO_DATABASE_URL, authToken: env.TURSO_AUTH_TOKEN, sqlDir });
+    const store = createTursoStore({
+      url: env.TURSO_DATABASE_URL,
+      authToken: env.TURSO_AUTH_TOKEN,
+      sqlDir,
+      dataKey: env.DATA_ENCRYPTION_KEY,
+    });
     const auth = createGoogleAuth({
       clientId: env.GOOGLE_CLIENT_ID,
       clientSecret: env.GOOGLE_CLIENT_SECRET,
@@ -167,6 +174,18 @@ if (auth) {
 }
 
 // 로그인 모드: 세션 쿠키의 사용자 id로 그 사람 범위의 저장소를 만든다 (모든 쿼리가 user_id로 걸러짐)
+// 완료 항목 자동 정리 (Turso 모드): 완료한 지 90일 지난 점검 기록은 지운다.
+// 사용자가 앱을 쓸 때 서버마다 하루 한 번씩만 실행 (따로 예약 작업 없이)
+const CLEANUP_DAYS = 90;
+const lastCleanup = new Map(); // 사용자 id → 마지막 정리 시각
+async function cleanupIfDue(userId) {
+  const now = Date.now();
+  if (now - (lastCleanup.get(userId) ?? 0) < 24 * 60 * 60 * 1000) return;
+  lastCleanup.set(userId, now);
+  if (lastCleanup.size > 10_000) lastCleanup.clear();
+  await store.purgeCompleted(userId, CLEANUP_DAYS);
+}
+
 // 요청마다 계정이 아직 있는지, 쿠키 세대가 맞는지 확인한다
 // (탈퇴했거나 "모든 기기에서 로그아웃"한 뒤 남은 쿠키는 401)
 app.use('/api', async (req, res, next) => {
@@ -181,6 +200,7 @@ app.use('/api', async (req, res, next) => {
   req.userId = session.uid;
   req.user = user;
   req.session = session;
+  await cleanupIfDue(session.uid);
   req.store = store.forUser(session.uid);
   next();
 });
@@ -189,7 +209,7 @@ app.use('/api', async (req, res, next) => {
 app.get('/api/me', async (req, res) => {
   if (!auth) return res.json({ auth: false });
   auth.dbsc.offer(req, res, req.session); // 지원 브라우저에 "이 기기에 로그인 묶기" 제안
-  res.json({ auth: true, email: req.user.email, deviceBound: Boolean(req.session.ds) });
+  res.json({ auth: true, email: req.user.email, deviceBound: Boolean(req.session.ds), cleanupDays: CLEANUP_DAYS });
 });
 
 // 서비스 탈퇴: 계정과 모든 사이트·점검 항목 삭제, 로그인 쿠키 삭제

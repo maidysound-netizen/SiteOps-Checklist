@@ -12,6 +12,7 @@
 - **앱 설치**: 머리글의 📲 앱 설치 버튼, 또는 [설치 안내](https://siteops-checklist.vercel.app/install.html) (아이폰·안드로이드·윈도우·맥)
 - **서비스 탈퇴**: 화면 맨 아래 버튼으로 계정과 모든 데이터를 즉시 삭제 ([개인정보처리방침](https://siteops-checklist.vercel.app/privacy.html))
 - 보안: 보안 헤더(CSP·다른 사이트에 끼워 넣기 금지), IP별 요청 횟수 제한(초과 시 429), 로그인 쿠키 7일(쓰는 동안 자동 연장), **모든 기기에서 로그아웃**, **DBSC**(지원 브라우저에서는 로그인을 기기에 묶어 쿠키를 복사해 가도 10분 뒤 무효)
+- 데이터 보호: 할 일 제목·메모 **AES-256-GCM 암호화 저장**, 완료 90일 지난 항목 **자동 정리**, 키·비밀번호를 적으려 하면 **저장 전 경고**
 - 🛡️ 보안 소개: [security.html](https://siteops-checklist.vercel.app/security.html), 취약점 제보: [/.well-known/security.txt](https://siteops-checklist.vercel.app/.well-known/security.txt)
 - 처음 가입하면 예시 사이트 2개·점검 항목 4개가 들어 있어 바로 써 볼 수 있습니다. (개인 정보 없는 일반 예시)
 
@@ -72,6 +73,7 @@ Node 내장 `node:test`로 [`test/`](test) 폴더의 테스트(API, CLI, Turso �
    GOOGLE_CLIENT_ID=...apps.googleusercontent.com
    GOOGLE_CLIENT_SECRET=...
    SESSION_SECRET=<32자 이상 무작위 문자열>
+   DATA_ENCRYPTION_KEY=<32바이트 base64, 할 일 제목·메모 암호화 키 — 잃어버리면 데이터를 못 읽으니 따로 보관>
    ```
 4. `npm start` → 브라우저에서 **Google로 로그인**.
 
@@ -109,6 +111,7 @@ todo-assignment/
 │   ├── examples.js        처음 가입한 사람에게 넣는 예시 데이터
 │   ├── security.js        보안 헤더 · IP별 요청 횟수 제한
 │   ├── dbsc.js            DBSC: 로그인을 기기 키에 묶기 (등록 · 10분마다 갱신)
+│   ├── cipher.js          할 일 제목·메모 암호화 (AES-256-GCM)
 │   └── errors.js          공통 오류
 ├── db/
 │   ├── schema.sql    테이블 · 인덱스 · 트리거 · 뷰 (로컬 SQLite)
@@ -118,6 +121,7 @@ todo-assignment/
 └── public/
     ├── index.html    화면
     ├── app.js        화면 동작 (우리 서버 API만 호출, 키 없음)
+    ├── secret-check.js  저장 전 비밀 값(API 키·비밀번호) 감지
     ├── style.css     스타일 (다크 모드 · 모바일 대응)
     ├── install.html  기기별 앱 설치 안내 (+ install.js)
     ├── privacy.html  개인정보처리방침

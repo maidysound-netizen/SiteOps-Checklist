@@ -52,6 +52,10 @@ CREATE TABLE IF NOT EXISTS todos (
   user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   title        TEXT    NOT NULL CHECK (length(trim(title)) BETWEEN 1 AND 100),
   memo         TEXT,
+  -- 저장 시 암호화 (lib/cipher.js): 실제 제목·메모는 아래 두 칸에 암호문으로, title에는 자물쇠(🔒)만 둔다
+  -- (예전 DB에는 서버가 ALTER TABLE로 추가하고 기존 평문을 암호화한다 → lib/store-turso.js)
+  title_enc    TEXT,
+  memo_enc     TEXT,
   site_id      INTEGER REFERENCES sites(id)      ON DELETE SET NULL,
   category_id  INTEGER REFERENCES categories(id) ON DELETE SET NULL,
   due_date     TEXT    CHECK (due_date IS NULL OR due_date IS date(due_date)),
@@ -104,7 +108,7 @@ END;
 -- 목록 화면용 뷰 (user_id 포함 — 조회할 때 항상 user_id로 거른다)
 CREATE VIEW IF NOT EXISTS todo_list AS
 SELECT
-  t.id, t.user_id, t.title, t.memo, t.due_date, t.is_done, t.completed_at,
+  t.id, t.user_id, t.title, t.memo, t.title_enc, t.memo_enc, t.due_date, t.is_done, t.completed_at,
   t.created_at, t.updated_at,
   t.site_id,     s.name  AS site_name,
   t.category_id, c.name  AS category_name, c.color AS category_color,

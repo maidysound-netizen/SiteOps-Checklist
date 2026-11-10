@@ -19,6 +19,7 @@ Object.assign(process.env, {
   GOOGLE_CLIENT_ID: 'test-client.apps.googleusercontent.com',
   GOOGLE_CLIENT_SECRET: 'test-client-secret',
   SESSION_SECRET: SECRET,
+  DATA_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
 });
 const { default: app } = await import('../server.js');
 const { createTursoStore } = await import('../lib/store-turso.js');
@@ -74,7 +75,7 @@ test('/auth/callback: state가 맞지 않으면 로그인 오류', async () => {
 });
 
 // ---------- 저장소 (사용자 분리) ----------
-const store = createTursoStore({ url: DB_URL, sqlDir: fileURLToPath(new URL('../db', import.meta.url)) });
+const store = createTursoStore({ url: DB_URL, sqlDir: fileURLToPath(new URL('../db', import.meta.url)), dataKey: process.env.DATA_ENCRYPTION_KEY });
 
 test('처음 가입하면 예시 사이트 2개·항목 4개, 다시 로그인하면 그대로', async () => {
   const id = await store.upsertUser({ sub: 'google-a', email: 'a@example.com', name: 'A' });
@@ -197,8 +198,103 @@ test('예전 DB(session_version 열 없음)도 서버가 열을 추가해 그대
   await old.execute("INSERT INTO users (google_sub, email) VALUES ('google-old', 'old@example.com')");
   old.close();
 
-  const migrated = createTursoStore({ url, sqlDir: fileURLToPath(new URL('../db', import.meta.url)) });
+  const migrated = createTursoStore({ url, sqlDir: fileURLToPath(new URL('../db', import.meta.url)), dataKey: process.env.DATA_ENCRYPTION_KEY });
   const user = await migrated.getUser(1);
   assert.equal(user.email, 'old@example.com');
   assert.equal(user.session_version, 0);
+});
+
+// ---------- 저장 시 암호화 ----------
+const { createClient } = await import('@libsql/client');
+const raw = createClient({ url: DB_URL }); // DB 파일을 통째로 훔쳐 간 사람의 시점
+
+test('암호화: DB에는 자물쇠와 암호문만, 앱에서는 원래 글자 그대로', async () => {
+  const id = await store.upsertUser({ sub: 'enc-a' });
+  const a = store.forUser(id);
+  const todo = await a.createTodo({ title: '결제 서버 점검 비밀 작전', memo: '아무도 몰라야 하는 메모' });
+  assert.equal(todo.title, '결제 서버 점검 비밀 작전');
+  assert.equal(todo.memo, '아무도 몰라야 하는 메모');
+  assert.equal(todo.title_enc, undefined, '암호문 칸은 응답에 없음');
+
+  const row = (await raw.execute({ sql: 'SELECT * FROM todos WHERE id = ?', args: [todo.id] })).rows[0];
+  assert.equal(row.title, '🔒');
+  assert.equal(row.memo, null);
+  assert.match(row.title_enc, /^v1\./);
+  assert.doesNotMatch(JSON.stringify(row), /비밀 작전|몰라야/);
+
+  const updated = await a.updateTodo(todo.id, { memo: null, title: '바꾼 제목' });
+  assert.equal(updated.title, '바꾼 제목');
+  assert.equal(updated.memo, null);
+  const all = (await raw.execute('SELECT title, memo FROM todos')).rows;
+  assert.ok(all.every((r) => r.title === '🔒' && r.memo === null), '예시 데이터까지 전부 암호화');
+});
+
+test('암호화: 암호문을 남의 항목으로 옮겨 붙이면 읽을 수 없다', async () => {
+  const a = store.forUser(await store.upsertUser({ sub: 'enc-b' }));
+  const bId = await store.upsertUser({ sub: 'enc-c' });
+  const mine = await a.createTodo({ title: 'A의 항목' });
+  const theirs = await store.forUser(bId).createTodo({ title: 'B의 항목' });
+  await raw.execute({
+    sql: 'UPDATE todos SET title_enc = (SELECT title_enc FROM todos WHERE id = ?) WHERE id = ?',
+    args: [mine.id, theirs.id],
+  });
+  await assert.rejects(store.forUser(bId).getTodo(theirs.id));
+});
+
+test('암호화: 예전 평문 DB는 서버가 열을 추가하고 기존 항목을 암호화한다', async () => {
+  const url = pathToFileURL(path.join(TMP, 'plain.db')).href;
+  const old = createClient({ url });
+  await old.execute('CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, google_sub TEXT NOT NULL UNIQUE, email TEXT, name TEXT, created_at TEXT)');
+  await old.execute(`CREATE TABLE todos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, title TEXT NOT NULL CHECK (length(trim(title)) BETWEEN 1 AND 100),
+    memo TEXT, site_id INTEGER, category_id INTEGER, due_date TEXT, is_done INTEGER NOT NULL DEFAULT 0, completed_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))`);
+  await old.execute("INSERT INTO users (google_sub) VALUES ('plain-user')");
+  await old.execute("INSERT INTO todos (user_id, title, memo) VALUES (1, '예전 평문 제목', '예전 메모')");
+
+  const migrated = createTursoStore({ url, sqlDir: fileURLToPath(new URL('../db', import.meta.url)), dataKey: process.env.DATA_ENCRYPTION_KEY });
+  const [todo] = await migrated.forUser(1).listTodos({ status: 'all' });
+  assert.equal(todo.title, '예전 평문 제목');
+  assert.equal(todo.memo, '예전 메모');
+  const row = (await old.execute('SELECT title, memo, title_enc FROM todos')).rows[0];
+  assert.equal(row.title, '🔒');
+  assert.equal(row.memo, null);
+  assert.match(row.title_enc, /^v1\./);
+  old.close();
+});
+
+test('암호화: 키가 다르면 읽을 수 없고, 키 형식이 틀리면 시작하지 않는다', async () => {
+  const other = createTursoStore({ url: DB_URL, sqlDir: fileURLToPath(new URL('../db', import.meta.url)), dataKey: Buffer.alloc(32, 9).toString('base64') });
+  const id = await store.upsertUser({ sub: 'enc-a' });
+  await assert.rejects(other.forUser(id).listTodos({ status: 'all' }));
+  assert.throws(() => createTursoStore({ url: DB_URL, sqlDir: '.', dataKey: 'too-short' }), /32바이트/);
+});
+
+// ---------- 완료 항목 자동 정리 ----------
+test('자동 정리: 완료 후 90일 지난 항목만, 그 사람 것만 지운다', async () => {
+  const id = await store.upsertUser({ sub: 'cleanup-a' });
+  const otherId = await store.upsertUser({ sub: 'cleanup-b' });
+  const a = store.forUser(id);
+  const old = await a.updateTodo((await a.createTodo({ title: '오래전에 끝낸 일' })).id, { is_done: 1 });
+  const recent = await a.updateTodo((await a.createTodo({ title: '최근에 끝낸 일' })).id, { is_done: 1 });
+  const open = await a.createTodo({ title: '아직 안 끝낸 일' });
+  const others = await store.forUser(otherId).updateTodo((await store.forUser(otherId).createTodo({ title: '남의 오래된 완료' })).id, { is_done: 1 });
+  const ago = "datetime('now', '+9 hours', '-91 days')";
+  await raw.execute({ sql: `UPDATE todos SET completed_at = ${ago} WHERE id IN (?, ?)`, args: [old.id, others.id] });
+
+  assert.equal(await store.purgeCompleted(id, 90), 1);
+  assert.equal(await a.getTodo(old.id), null);
+  assert.ok(await a.getTodo(recent.id));
+  assert.ok(await a.getTodo(open.id));
+  assert.ok(await store.forUser(otherId).getTodo(others.id), '다른 사람 것은 그 사람이 쓸 때 정리');
+});
+
+test('자동 정리: 앱을 쓰면 서버가 하루 한 번 알아서 정리, /api/me가 기간을 알려 줌', async () => {
+  const id = await store.upsertUser({ sub: 'cleanup-c' });
+  const a = store.forUser(id);
+  const old = await a.updateTodo((await a.createTodo({ title: '옛 기록' })).id, { is_done: 1 });
+  await raw.execute({ sql: "UPDATE todos SET completed_at = datetime('now', '+9 hours', '-100 days') WHERE id = ?", args: [old.id] });
+  const me = await call(sessionCookie(id), 'GET', '/api/me');
+  assert.equal(me.data.cleanupDays, 90);
+  assert.equal(await a.getTodo(old.id), null);
 });

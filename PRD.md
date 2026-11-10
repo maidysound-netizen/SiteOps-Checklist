@@ -76,7 +76,7 @@ v3.0에서 지웠던 Supabase + Google 로그인을 되살리되, 짝의 앱처�
 | 예시 데이터 | 만든 사람의 개인 사이트·개인 점검 항목 | **일반 예시**: 내 블로그·회사 홈페이지 / 관리자 비밀번호·2단계 인증, 배포 후 동작 확인, 백업 복원 테스트, SSL 인증서 만료일. 처음 가입한 사람에게 자동으로 넣어 줌 |
 | 지운 것 | — | `lib/store-supabase.js`, `lib/auth.js`, `supabase/` 폴더, `@supabase/supabase-js` |
 
-- 환경 변수: `DB_DRIVER=turso`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SESSION_SECRET` (모두 서버에만)
+- 환경 변수: `DB_DRIVER=turso`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SESSION_SECRET`, `DATA_ENCRYPTION_KEY`(v4.1) (모두 서버에만)
 - Google OAuth 리디렉션 URI가 Supabase 주소에서 우리 서버 주소(`/auth/callback`)로 바뀐다.
 - 로컬 SQLite 모드(로그인 없음)와 CLI는 그대로.
 - 정리: Supabase 조직·프로젝트 삭제 완료, Vercel 환경 변수 `SUPABASE_*` 삭제. Google OAuth 리디렉션 URI는 `http://localhost:3000/auth/callback`, `https://siteops-checklist.vercel.app/auth/callback`만 남김 (예전 Supabase·로컬 Docker 주소 삭제).
@@ -103,6 +103,10 @@ v3.0에서 지웠던 Supabase + Google 로그인을 되살리되, 짝의 앱처�
 | DBSC (기기 묶기) | Device Bound Session Credentials(W3C 편집자 초안, 2026-11-09 기준). 로그인한 화면이 `/api/me`를 부르면 `Secure-Session-Registration` 헤더로 등록 제안 → 지원 브라우저가 기기 안(TPM 등)에 꺼낼 수 없는 키를 만들어 서명한 증명(`Secure-Session-Response`, `typ: dbsc+jwt`, ES256/RS256)을 `/auth/dbsc/register`로 보냄 → 공개 키를 `device_sessions` 표에 저장, 로그인 쿠키에 기기 세션 id(`ds`)를 넣고 **10분짜리 기기 쿠키 `sid_dev`** 발급. 이후 `ds`가 든 로그인 쿠키는 `sid_dev`도 맞아야 통과 → **쿠키를 복사해 가도 기기 키가 없어 최대 10분 뒤 쓸모없음**. 10분마다 브라우저가 `/auth/dbsc/refresh`에서 서버 문제(403 + `Secure-Session-Challenge`)에 기기 키로 서명해 새로 받음. 다른 키 서명 401(세션 종료), 오래된 문제 403(새 문제로 재시도). 로그아웃·모든 기기 로그아웃·탈퇴 시 기기 세션 삭제 → 갱신 응답 `{"continue": false}` |
 | DBSC 한계 | 지원하지 않는 브라우저(현재 Safari·Firefox, TPM 없는 PC 등)는 제안을 무시하고 예전처럼 7일 쿠키만 씀 → 그런 기기에서는 효과 없음. 규격이 초안이라 헤더 이름 등이 바뀔 수 있음. `/auth/dbsc/*`는 브라우저가 직접 보내므로 CSRF 헤더 검사에서 빼고, 대신 서버가 서명한 문제 + 기기 키 서명으로 확인. 개발한 맥에서는 실제 브라우저로 동작을 확인하지 못했고, 가짜 지원 브라우저 테스트로만 확인 |
 | 보안 소개 페이지 | `security.html`: 적용한 방어를 9가지로 정리해 공개(과장 없이 실제 동작·테스트한 것만). 취약점 제보 안내 + `/.well-known/security.txt`(RFC 9116, 만료 2027-11-10 → 해마다 갱신). 화면 맨 아래 "🛡️ 보안" 링크 |
+| 비밀 값 감지 경고 | 할 일을 저장할 때 제목·메모에 API 키(`sk-`, `ghp_`, `AKIA`, `AIza`, `GOCSPX-`, `xox?-`, Stripe, Supabase), 개인 키, JWT, 주소 속 비밀번호, "비번:"·"password="·"api_key=" 뒤의 값이 보이면 "비밀번호 관리자에 넣으세요" 경고(취소하면 저장 안 함). `public/secret-check.js`, 화면에서만 검사하고 찾은 값은 어디에도 보내지 않음. 평범한 문장("비밀번호 변경", "API 키 교체 일정")은 경고하지 않음 |
+| 저장 시 암호화 | Turso 모드에서 할 일 **제목·메모를 AES-256-GCM으로 암호화**해 저장(`lib/cipher.js`). 키 `DATA_ENCRYPTION_KEY`는 서버 환경 변수에만. AAD에 사용자 id·칸 이름 → 암호문을 남의 항목에 옮겨 붙이면 복호화 실패. 제목 칸의 1~100자 CHECK를 지키려고 테이블을 다시 만들지 않고 `title_enc`·`memo_enc` 열을 **추가**, `title`에는 🔒만 남김. 기존 평문 항목은 서버가 처음 뜰 때 한 번 암호화. **암호화하지 않는 것**: 사이트 이름·주소(사람마다 이름 중복 검사에 필요), 마감일·완료 여부·카테고리(정렬·필터에 필요), 이메일. 로컬 SQLite 모드는 내 컴퓨터 파일이라 암호화 안 함 |
+| 암호화 키 관리 | 키를 잃어버리면 저장된 할 일을 **영영 읽을 수 없음** → 비밀번호 관리자에 따로 보관. 키를 바꾸면 기존 데이터를 못 읽음(키 교체 기능은 아직 없음). Vercel 환경 변수에 먼저 넣고 배포해야 함(없으면 서버가 시작하지 않음) |
+| 완료 항목 자동 정리 | Turso 모드에서 **완료한 지 90일 지난 항목 자동 삭제**. 예약 작업 없이 그 사용자가 앱을 쓸 때 서버마다 하루 한 번 실행. 목록 아래에 안내 문구. 로컬 모드는 내 기록이라 지우지 않음 |
 | 비상시 전체 로그아웃 | 여전히 Vercel의 `SESSION_SECRET`을 바꾸고 재배포 (SECRET이 새면 아무 계정 쿠키나 만들 수 있으므로 이 방법뿐) |
 | 개인정보처리방침 | 탈퇴 방법(즉시·전부·복구 불가), 앱 삭제 ≠ 계정 삭제, 쿠키 2종·광고 쿠키 없음, 기기에는 화면 파일만 저장. 시행일 2026-11-10 |
 
@@ -339,6 +343,7 @@ Supabase 모드에서는 모든 `/api/*`에 로그인 쿠키가 필요하다 (�
 | v4.1 보안 헤더·요청 제한 | `npm test` 41건 통과(CSP·frame 차단·nosniff·X-Powered-By 없음, 20KB 초과 413, 쓰기 61번째부터 429, 제한 단위 테스트). Chrome에서 CSP 위반 없음, 서비스 워커 활성·화면 파일 11개 저장 | 통과 |
 | v4.1 사이트 빼기·세션 | `npm test` 48건 통과: 사이트 빼기(항목 남음·site_id null, 남의 사이트 못 뺌·404, 로컬 모드 포함), 모든 기기 로그아웃 후 예전 쿠키 읽기·쓰기 401·새 쿠키 통과·다른 사용자 영향 없음, 하루 지난 쿠키 자동 재발급(Max-Age 7일), 예전 DB에 `session_version` 열 자동 추가. Turso 테스트는 서버와 같은 임시 파일 DB 사용. 화면에서 사이트 빼기 후 항목 유지 확인 | 통과 |
 | v4.1 DBSC | `npm test` 54건 통과(DBSC 6건): 테스트가 P-256 기기 키를 만들어 등록 제안 → 등록 → 세션 설정 JSON·`sid_dev`(Max-Age 600) 확인, 기기에 묶인 뒤 로그인 쿠키만 있으면 401, 갱신 403 문제 → 서명 → 새 쿠키, 다른 키 서명 401·다른 세션 문제 403(쿠키 안 줌), 남의 문제·위조 증명·깨진 JWT 400, 로그인 없이 등록 401, 로그아웃·모든 기기 로그아웃·탈퇴 후 갱신 `continue: false` | 통과 |
+| v4.1 비밀 값·암호화·자동 정리 | `npm test` 63건 통과: 비밀 값 패턴 16종 감지·평범한 문장 7개 무경고, DB 파일을 직접 열어 보면 제목 🔒·메모 null·암호문만(예시 데이터 포함), 남의 항목으로 암호문 옮기면 읽기 실패, 다른 키로는 읽기 실패·짧은 키는 시작 거부, 예전 평문 DB를 열 추가 후 암호화, 완료 90일 지난 항목만·그 사람 것만 삭제, `/api/me` 호출 시 자동 정리. 화면에서 "비번: …" 메모 저장 시 경고·취소하면 저장 안 됨 확인 | 통과 |
 | v3.2 CLI | `npm test` 27건 통과 (CLI 3건 추가: 목록·추가·완료·오늘 요약, 잘못된 입력 종료 코드 1). 임시 DB로 실행해 `db/siteops.db`는 건드리지 않음 | 통과 |
 | v3.1 실제 로그인 | 클라우드 프로젝트 Restore 후 로컬 서버(`127.0.0.1:3000`)에서 Google 로그인 성공, 기존 항목 표시. 로그인 전 `/api/me` 401 | 통과 |
 | v3.1 배포 로그인 | 배포 사이트에서 Google 로그인 성공. 돌아오는 주소가 `https://…/auth/callback`, 쿠키가 `HttpOnly; Secure; SameSite=Lax`, 로그인 전 API 401 | 통과 |

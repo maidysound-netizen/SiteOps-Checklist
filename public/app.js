@@ -226,12 +226,25 @@ function openEdit(todo) {
   $('#edit-dialog').showModal();
 }
 
+// 저장 전에 비밀 값(API 키·비밀번호)이 보이면 경고 (secret-check.js). 취소하면 저장하지 않는다.
+function okToSave(data) {
+  const found = findSecrets(data.title, data.memo);
+  if (!found.length) return true;
+  return confirm(
+    `⚠️ 비밀 값처럼 보이는 내용이 있습니다: ${found.join(', ')}\n\n` +
+      '할 일 목록에는 키·비밀번호를 적지 말고 비밀번호 관리자에 넣어 주세요.\n' +
+      '(확인: 그래도 저장 / 취소: 돌아가서 고치기)',
+  );
+}
+
 $('#add-form').addEventListener('submit', async (event) => {
   event.preventDefault();
   const form = event.currentTarget.elements;
   $('#add-error').textContent = '';
+  const data = formData(event.currentTarget);
+  if (!okToSave(data)) return;
   try {
-    await api('/api/todos', { method: 'POST', body: formData(event.currentTarget) });
+    await api('/api/todos', { method: 'POST', body: data });
     form.title.value = '';
     form.memo.value = '';
     form.due_date.value = '';
@@ -244,8 +257,10 @@ $('#add-form').addEventListener('submit', async (event) => {
 
 $('#edit-form').addEventListener('submit', async (event) => {
   event.preventDefault();
+  const data = formData(event.currentTarget);
+  if (!okToSave(data)) return;
   try {
-    await api(`/api/todos/${state.editingId}`, { method: 'PATCH', body: formData(event.currentTarget) });
+    await api(`/api/todos/${state.editingId}`, { method: 'PATCH', body: data });
     $('#edit-dialog').close();
     await refresh();
   } catch (err) {
@@ -361,6 +376,10 @@ async function initAuth() {
   $('#user-email').textContent = me.email ?? '';
   $('#user-box').hidden = false;
   $('#delete-account-box').hidden = false;
+  if (me.cleanupDays) {
+    $('#cleanup-note').textContent = `🧹 완료한 지 ${me.cleanupDays}일이 지난 항목은 자동으로 정리됩니다.`;
+    $('#cleanup-note').hidden = false;
+  }
   return true;
 }
 
