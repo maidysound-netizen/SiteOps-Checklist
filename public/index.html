@@ -26,6 +26,7 @@
         <div id="user-box" class="user-box" hidden>
           <span id="user-email"></span>
           <button type="button" id="logout" class="btn small">로그아웃</button>
+          <button type="button" id="logout-all" class="link-button" title="잃어버린 폰 등 다른 기기의 로그인도 모두 끊습니다">모든 기기에서 로그아웃</button>
         </div>
       </div>
     </header>
@@ -73,7 +74,8 @@
       <p id="add-error" class="error" role="alert"></p>
 
       <details class="site-add">
-        <summary>+ 사이트 추가</summary>
+        <summary>+ 사이트 추가 · 빼기</summary>
+        <ul id="site-list" class="site-list"></ul>
         <form id="site-form" class="site-form" autocomplete="off">
           <input name="name" maxlength="50" required placeholder="사이트 이름 (예: 내 블로그)" aria-label="사이트 이름">
           <input name="url" type="url" placeholder="https://… (선택)" aria-label="사이트 주소">

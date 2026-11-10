@@ -78,6 +78,40 @@ function fillSelects() {
     el('option', { value: '', textContent: '모든 사이트' }),
     ...state.sites.map((s) => el('option', { value: s.id, textContent: s.name })),
   );
+  renderSiteList();
+}
+
+// 사이트 관리 목록 (각 사이트 옆에 빼기 버튼)
+function renderSiteList() {
+  $('#site-list').replaceChildren(
+    ...state.sites.map((site) =>
+      el('li', {}, [
+        el('span', { textContent: site.name }),
+        el('button', {
+          type: 'button',
+          className: 'link-button',
+          textContent: '빼기',
+          ariaLabel: `${site.name} 사이트 빼기`,
+          onclick: () => removeSite(site),
+        }),
+      ]),
+    ),
+  );
+}
+
+async function removeSite(site) {
+  if (!confirm(`'${site.name}' 사이트를 뺄까요?\n\n이 사이트의 점검 항목은 지워지지 않고 '사이트 없음'으로 남습니다.`)) return;
+  $('#site-error').textContent = '';
+  try {
+    await api(`/api/sites/${site.id}`, { method: 'DELETE' });
+    state.sites = await api('/api/sites');
+    if (state.filter.site === String(site.id)) state.filter.site = '';
+    fillSelects();
+    $('#filter-site').value = state.filter.site;
+    await refresh();
+  } catch (err) {
+    $('#site-error').textContent = err.message;
+  }
 }
 
 function renderTabs() {
@@ -229,7 +263,6 @@ $('#site-form').addEventListener('submit', async (event) => {
     fillSelects();
     $('#add-form').elements.site_id.value = site.id;
     form.reset();
-    form.closest('details').open = false;
   } catch (err) {
     $('#site-error').textContent = err.message;
   }
@@ -285,6 +318,17 @@ if ('serviceWorker' in navigator) {
 $('#logout').addEventListener('click', async () => {
   await api('/auth/logout', { method: 'POST' }).catch(() => {});
   location.reload();
+});
+
+// 모든 기기에서 로그아웃: 폰을 잃어버렸거나 다른 곳에 로그인이 남은 것 같을 때
+$('#logout-all').addEventListener('click', async () => {
+  if (!confirm('모든 기기에서 로그아웃할까요?\n\n이 기기를 포함해 이 계정으로 로그인한 모든 곳의 로그인이 끊깁니다. 데이터는 그대로입니다.')) return;
+  try {
+    await api('/api/logout-all', { method: 'POST' });
+    location.reload();
+  } catch (err) {
+    alert(`로그아웃하지 못했습니다: ${err.message}`);
+  }
 });
 
 $('#edit-cancel').addEventListener('click', () => $('#edit-dialog').close());

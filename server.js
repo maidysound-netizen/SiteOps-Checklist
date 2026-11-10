@@ -140,30 +140,40 @@ if (auth) {
 }
 
 // 로그인 모드: 세션 쿠키의 사용자 id로 그 사람 범위의 저장소를 만든다 (모든 쿼리가 user_id로 걸러짐)
-// 쓰기 요청은 계정이 아직 있는지도 확인한다 (탈퇴한 계정의 다른 기기 쿠키로는 아무것도 못 쓰게)
+// 요청마다 계정이 아직 있는지, 쿠키 세대가 맞는지 확인한다
+// (탈퇴했거나 "모든 기기에서 로그아웃"한 뒤 남은 쿠키는 401)
 app.use('/api', async (req, res, next) => {
   if (!auth) {
     req.store = store;
     return next();
   }
-  req.userId = auth.userId(req);
-  if (req.method !== 'GET' && !(await store.getUser(req.userId))) throw new HttpError(401, '로그인이 필요합니다.');
-  req.store = store.forUser(req.userId);
+  const session = auth.session(req);
+  const user = await store.getUser(session.uid);
+  if (!user || (user.session_version ?? 0) !== session.v) throw new HttpError(401, '로그인이 필요합니다.');
+  auth.renew(req, res, session);
+  req.userId = session.uid;
+  req.user = user;
+  req.store = store.forUser(session.uid);
   next();
 });
 
 // 화면이 로그인 상태를 확인하는 값 (SQLite 모드는 로그인 없음)
 app.get('/api/me', async (req, res) => {
   if (!auth) return res.json({ auth: false });
-  const user = await store.getUser(req.userId);
-  if (!user) throw new HttpError(401, '로그인이 필요합니다.');
-  res.json({ auth: true, email: user.email });
+  res.json({ auth: true, email: req.user.email });
 });
 
 // 서비스 탈퇴: 계정과 모든 사이트·점검 항목 삭제, 로그인 쿠키 삭제
 app.delete('/api/me', async (req, res) => {
   if (!auth) throw new HttpError(400, '로그인 모드에서만 탈퇴할 수 있습니다.');
   await store.deleteUser(req.userId);
+  auth.logout(req, res);
+});
+
+// 모든 기기에서 로그아웃: 이 사람의 모든 로그인 쿠키를 무효로 하고, 이 기기의 쿠키도 지운다
+app.post('/api/logout-all', async (req, res) => {
+  if (!auth) throw new HttpError(400, '로그인 모드에서만 쓸 수 있습니다.');
+  await store.bumpSessionVersion(req.userId);
   auth.logout(req, res);
 });
 
@@ -213,6 +223,11 @@ app.get('/api/sites', async (req, res) => {
 
 app.post('/api/sites', async (req, res) => {
   res.status(201).json(await req.store.createSite(parseSiteInput(req.body)));
+});
+
+app.delete('/api/sites/:id', async (req, res) => {
+  if (!(await req.store.deleteSite(parseId(req.params.id)))) throw new HttpError(404, '사이트를 찾을 수 없습니다.');
+  res.status(204).end();
 });
 
 app.get('/api/summary', async (req, res) => {

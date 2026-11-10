@@ -10,7 +10,10 @@ CREATE TABLE IF NOT EXISTS users (
   google_sub TEXT    NOT NULL UNIQUE,
   email      TEXT,
   name       TEXT,
-  created_at TEXT    NOT NULL DEFAULT (datetime('now', '+9 hours'))
+  created_at TEXT    NOT NULL DEFAULT (datetime('now', '+9 hours')),
+  -- 로그인 쿠키 세대: "모든 기기에서 로그아웃"하면 1 올라가고, 예전 쿠키는 전부 무효가 된다
+  -- (이 열이 없던 기존 DB에는 서버가 ALTER TABLE로 추가한다 → lib/store-turso.js)
+  session_version INTEGER NOT NULL DEFAULT 0
 );
 
 -- 관리 대상 사이트 (사용자마다 이름 고유)

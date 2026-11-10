@@ -189,6 +189,20 @@ test('너무 큰 요청은 413', async () => {
   assert.equal(status, 413);
 });
 
+test('사이트 빼기(로컬): 항목은 남고 사이트 없음으로, 없는 사이트 404', async () => {
+  const site = (await call('POST', '/sites', { name: '뺄 사이트' })).data;
+  const todo = (await create({ title: '뺄 사이트 항목', site_id: site.id })).data;
+  assert.equal((await call('DELETE', `/sites/${site.id}`)).status, 204);
+  assert.equal((await call('GET', `/todos/${todo.id}`)).data.site_id, null);
+  assert.ok(!(await call('GET', '/sites')).data.some((s) => s.id === site.id));
+  assert.equal((await call('DELETE', `/sites/${site.id}`)).status, 404);
+});
+
+test('로컬 모드에서는 모든 기기 로그아웃 불가(400)', async () => {
+  assert.equal((await call('POST', '/logout-all')).status, 400);
+});
+
+// 쓰기 제한을 다 써 버리므로 이 파일의 마지막 테스트로 둔다
 test('쓰기 요청은 IP마다 1분에 60번까지, 넘으면 429', async () => {
   const results = [];
   for (let i = 0; i < 70; i++) results.push((await call('POST', '/todos', { title: '' })).status);
